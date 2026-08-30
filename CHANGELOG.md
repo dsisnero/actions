@@ -14,6 +14,12 @@ All notable changes to xberg-io/actions are documented in this file.
   matching the existing `python-extra-projects` pattern, and is validated against a semver shape
   before use.
 
+### Fixed
+
+- `publish-homebrew-source-formulas/scripts/test_render.py` is now part of
+  `tool.pytest.ini_options.testpaths`, so its 8 tests are collected by the release gate instead of
+  silently skipped.
+
 ## [1.10.2] - 2026-08-30
 
 ### Fixed
