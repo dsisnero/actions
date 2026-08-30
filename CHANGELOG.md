@@ -66,6 +66,14 @@ All notable changes to xberg-io/actions are documented in this file.
   container unmodified via `CIBW_ENVIRONMENT_PASS_LINUX`; the script reads it as a real shell
   variable evaluated only inside the container's own shell.
 
+- Added `tests/test_security_regressions.py`: committed, mutation-proven adversarial regression
+  tests for the golangci-lint, `list-language-definitions`, `build-rust-cli`, `cleanup-rust-cache`,
+  `build-docs`, and `build-python-wheels` fixes above. Each test extracts the real `run:` script
+  for its step directly from the action/workflow YAML (never a pasted copy) and asserts on argv
+  arrays or filesystem side effects, never on a rejoined string — the `build-rust-cli` tests in
+  particular assert exact argv counts, which is precisely the class of check that would have
+  caught the `read -ra` regression above before it shipped.
+
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of
