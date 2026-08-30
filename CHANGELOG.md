@@ -32,6 +32,10 @@ All notable changes to xberg-io/actions are documented in this file.
   inside both a bash `"..."` argument and an embedded Python string literal, so closing only one
   layer would have left it exploitable. The path is now passed as `sys.argv[1]` rather than
   interpolated into the Python source string, closing both layers at once.
+- `setup-swift` installed via `SwiftyLab/setup-swift@latest` — a separate, explicitly moving tag
+  ref in that repo (resolves to a different commit than any versioned release), giving no
+  protection against an upstream compromise or bad push. Pinned to the commit SHA behind the
+  current `v1.14.0` release: a GitHub-verified, PGP-signed annotated tag, audited 2026-08-30.
 
 ### Fixed
 

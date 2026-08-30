@@ -25,8 +25,16 @@ runs:
           echo "installed=false" >> "$GITHUB_OUTPUT"
         fi
 
+    # Pinned to the commit SHA behind v1.14.0, not @latest: `latest` is a separate,
+    # explicitly moving tag ref in this repo (resolves to a different SHA than v1.14.0),
+    # so it gave zero protection against an upstream compromise or accidental bad push.
+    # Audited 2026-08-30: `v1.14.0` is a signed, annotated tag
+    # (`gh api repos/SwiftyLab/setup-swift/git/refs/tags/v1.14.0` -> tag object
+    # 76e3e48ac9c85b393a30adefd96afe0395b23c29, GitHub-verified PGP signature) pointing at
+    # commit 38f54a76b70d989321de9dc7c840618c08cf56e9, which is what is pinned below. Bump
+    # this SHA (and re-audit) when picking up a newer setup-swift release. ~keep
     - name: Install Swift via SwiftyLab/setup-swift
       if: steps.existing.outputs.installed != 'true'
-      uses: SwiftyLab/setup-swift@latest
+      uses: SwiftyLab/setup-swift@38f54a76b70d989321de9dc7c840618c08cf56e9 # v1.14.0
       with:
         swift-version: ${{ inputs.swift-version }}
