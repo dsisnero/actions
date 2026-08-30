@@ -28,6 +28,10 @@ All notable changes to xberg-io/actions are documented in this file.
   into a bash array via `read -ra` after being passed through `env:`, preserving its documented
   multi-flag contract (e.g. `--features foo --no-default-features`) while making shell
   metacharacters in the value inert argv tokens instead of a second command.
+- `list-language-definitions`'s `definitions-path` had a double quote-breakout surface: it sat
+  inside both a bash `"..."` argument and an embedded Python string literal, so closing only one
+  layer would have left it exploitable. The path is now passed as `sys.argv[1]` rather than
+  interpolated into the Python source string, closing both layers at once.
 
 ### Fixed
 
