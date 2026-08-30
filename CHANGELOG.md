@@ -43,6 +43,14 @@ All notable changes to xberg-io/actions are documented in this file.
   text). An unbalanced quote now fails the step loudly instead of silently truncating the value;
   a literal backslash in the value is treated as an escape by `xargs` and collapsed, a documented,
   accepted trade-off.
+- `cleanup-rust-cache`'s `large-artifact-patterns` handling ran `rm -rf $pattern` against each
+  caller-supplied line unquoted and unconstrained: a pattern of `--no-preserve-root /` became
+  argv to `rm -rf`, an arbitrary-deletion primitive that (independently reproduced during this
+  fix) attempted to delete `/etc/passwd` outside a sandboxed test. Deletion is now confined to
+  `target/`: each pattern is rejected outright if it starts with `-` (would misparse as an `rm`
+  flag), starts with `/` (absolute), or contains `..` (traversal), and glob expansion happens from
+  *inside* `target/` so even a permissive pattern can only ever match paths under it.
+
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of

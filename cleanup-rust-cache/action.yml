@@ -19,16 +19,40 @@ runs:
         MAX_LIB_SIZE: ${{ inputs.max-lib-size }}
       run: |
         # Remove additional large artifacts specified by consumer. Each line is an
-        # unquoted glob pattern by contract (e.g. "target/*.o"), so this deliberately
-        # leaves $pattern unquoted for glob expansion rather than treating it as a
-        # literal path.
+        # unquoted glob pattern by contract (e.g. "*.o", "sub/*.rlib"), matched
+        # *relative to target/* — never treated as a literal path and never allowed to
+        # resolve outside target/. An earlier version ran `rm -rf $pattern` at the repo
+        # root: a pattern of "--no-preserve-root /" became argv to `rm -rf`, an
+        # arbitrary-deletion primitive. Every line is now validated before any deletion
+        # is attempted:
+        #   - a pattern starting with '-' is rejected outright (would misparse as an rm
+        #     flag, e.g. --no-preserve-root)
+        #   - a pattern starting with '/' (absolute) or containing '..' (traversal) is
+        #     rejected outright
+        #   - expansion happens from *inside* target/ (a subshell `cd`s there first),
+        #     so even a permissive pattern can only ever match paths under target/
+        #   - `rm -rf --` on the matched name guards against a real filename that
+        #     happens to start with '-' being misread as a flag
+        # ~keep
         if [ -n "$LARGE_ARTIFACT_PATTERNS" ]; then
-          echo "$LARGE_ARTIFACT_PATTERNS" | while IFS= read -r pattern; do
-            if [ -n "$pattern" ]; then
-              rm -rf $pattern 2>/dev/null || true
-              echo "Removed: $pattern"
-            fi
-          done
+          while IFS= read -r pattern; do
+            [ -z "$pattern" ] && continue
+            case "$pattern" in
+              -*|/*|*..*)
+                echo "::error::skipping unsafe large-artifact-patterns entry: $pattern" >&2
+                continue
+                ;;
+            esac
+            (
+              cd target 2>/dev/null || exit 0
+              shopt -s nullglob
+              # shellcheck disable=SC2086  # intentional glob expansion of a validated pattern
+              for match in $pattern; do
+                rm -rf -- "$match"
+                echo "Removed: target/$match"
+              done
+            )
+          done <<< "$LARGE_ARTIFACT_PATTERNS"
         fi
 
         # Remove large compiled libraries
