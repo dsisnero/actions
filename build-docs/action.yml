@@ -39,9 +39,11 @@ runs:
     - name: Build documentation
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        DOCS_STRICT: ${{ inputs.strict }}
       run: |
         set -euo pipefail
-        if [ "${{ inputs.strict }}" = "true" ]; then
+        if [ "$DOCS_STRICT" = "true" ]; then
           if [ -x "$(command -v task)" ]; then
             task docs:build:strict
           else

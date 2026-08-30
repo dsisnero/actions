@@ -31,9 +31,13 @@ runs:
     - name: Verify plugin version tracks core
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: python3 "${{ inputs.version-sync-script }}" --check
+      env:
+        VERSION_SYNC_SCRIPT: ${{ inputs.version-sync-script }}
+      run: python3 "$VERSION_SYNC_SCRIPT" --check
 
     - name: Verify generated plugin bundles are current
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      run: uvx ai-rulez==${{ inputs.ai-rulez-version }} verify --recursive --plugin --if-configured
+      env:
+        AI_RULEZ_VERSION: ${{ inputs.ai-rulez-version }}
+      run: uvx "ai-rulez==$AI_RULEZ_VERSION" verify --recursive --plugin --if-configured

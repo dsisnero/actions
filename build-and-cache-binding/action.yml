@@ -84,13 +84,20 @@ runs:
     - name: Compute cache keys
       id: compute-keys
       shell: bash
+      env:
+        CACHE_VERSION: ${{ inputs.cache-version }}
+        BINDING_NAME: ${{ inputs.binding-name }}
+        BUILD_PLATFORM: ${{ inputs.platform }}
+        RUST_HASH: ${{ inputs.rust-hash }}
+        BINDING_HASH: ${{ steps.compute-hashes.outputs.binding-hash }}
+        DEPS_HASH: ${{ steps.compute-hashes.outputs.deps-hash }}
       run: |
         set -euo pipefail
-        CACHE_KEY="${{ inputs.cache-version }}-${{ inputs.binding-name }}-${{ inputs.platform }}-rust-${{ inputs.rust-hash }}-binding-${{ steps.compute-hashes.outputs.binding-hash }}-deps-${{ steps.compute-hashes.outputs.deps-hash }}"
+        CACHE_KEY="${CACHE_VERSION}-${BINDING_NAME}-${BUILD_PLATFORM}-rust-${RUST_HASH}-binding-${BINDING_HASH}-deps-${DEPS_HASH}"
         echo "cache-key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
 
-        RESTORE_KEY_1="${{ inputs.cache-version }}-${{ inputs.binding-name }}-${{ inputs.platform }}-rust-${{ inputs.rust-hash }}-"
-        RESTORE_KEY_2="${{ inputs.cache-version }}-${{ inputs.binding-name }}-${{ inputs.platform }}-"
+        RESTORE_KEY_1="${CACHE_VERSION}-${BINDING_NAME}-${BUILD_PLATFORM}-rust-${RUST_HASH}-"
+        RESTORE_KEY_2="${CACHE_VERSION}-${BINDING_NAME}-${BUILD_PLATFORM}-"
 
         echo "fallback-keys<<EOF" >> "$GITHUB_OUTPUT"
         echo "$RESTORE_KEY_1" >> "$GITHUB_OUTPUT"
@@ -111,8 +118,10 @@ runs:
     - name: Check if cache hit
       id: cache-check
       shell: bash
+      env:
+        CACHE_HIT_OUTPUT: ${{ steps.restore-cache.outputs.cache-hit }}
       run: |
-        if [[ "${{ steps.restore-cache.outputs.cache-hit }}" == "true" ]]; then
+        if [[ "$CACHE_HIT_OUTPUT" == "true" ]]; then
           echo "CACHE_HIT=true" >> "$GITHUB_ENV"
           echo "Cache HIT - using cached artifacts"
         else
@@ -124,10 +133,12 @@ runs:
       id: validate
       if: steps.restore-cache.outputs.cache-hit == 'true' && inputs.validate-artifacts == 'true'
       shell: bash
+      env:
+        CACHE_PATHS: ${{ inputs.cache-paths }}
+        BINDING_NAME: ${{ inputs.binding-name }}
       run: |
         set -euo pipefail
         VALIDATE_SCRIPT="${{ github.action_path }}/scripts/validate_cache.py"
-        CACHE_PATHS="${{ inputs.cache-paths }}"
 
         declare -a ARTIFACT_PATHS
         while IFS= read -r path; do
@@ -136,7 +147,7 @@ runs:
           fi
         done <<< "$CACHE_PATHS"
 
-        if python3 "$VALIDATE_SCRIPT" "${{ inputs.binding-name }}" "${ARTIFACT_PATHS[@]}"; then
+        if python3 "$VALIDATE_SCRIPT" "$BINDING_NAME" "${ARTIFACT_PATHS[@]}"; then
           echo "validated=true" >> "$GITHUB_OUTPUT"
         else
           echo "validated=false" >> "$GITHUB_OUTPUT"
@@ -145,9 +156,10 @@ runs:
     - name: Restore source files after partial cache restore
       if: env.CACHE_HIT == 'false'
       shell: bash
+      env:
+        CACHE_PATHS: ${{ inputs.cache-paths }}
       run: |
         set -euo pipefail
-        CACHE_PATHS="${{ inputs.cache-paths }}"
         while IFS= read -r path; do
           if [[ -n "$path" ]]; then
             clean_path="${path%/}"
@@ -157,21 +169,30 @@ runs:
           fi
         done <<< "$CACHE_PATHS"
 
+    # ~keep inputs.build-command is an intentional "run this command" contract (like
+    # install-command elsewhere), not a data value: consumers pass an arbitrary shell
+    # command here by design, so it stays a direct splice rather than being routed
+    # through env/quoted — env: would only stringify it back into the same shell
+    # execution, not add any safety, since the whole point is caller-controlled code.
     - name: Build binding
       if: env.CACHE_HIT == 'false'
       shell: bash
+      env:
+        BINDING_NAME: ${{ inputs.binding-name }}
       run: |
         set -euo pipefail
-        echo "Building ${{ inputs.binding-name }} binding..."
+        echo "Building $BINDING_NAME binding..."
         ${{ inputs.build-command }}
 
     - name: Validate build artifacts
       if: env.CACHE_HIT == 'false' && inputs.validate-artifacts == 'true'
       shell: bash
+      env:
+        CACHE_PATHS: ${{ inputs.cache-paths }}
+        BINDING_NAME: ${{ inputs.binding-name }}
       run: |
         set -euo pipefail
         VALIDATE_SCRIPT="${{ github.action_path }}/scripts/validate_cache.py"
-        CACHE_PATHS="${{ inputs.cache-paths }}"
 
         declare -a ARTIFACT_PATHS
         while IFS= read -r path; do
@@ -180,7 +201,7 @@ runs:
           fi
         done <<< "$CACHE_PATHS"
 
-        python3 "$VALIDATE_SCRIPT" "${{ inputs.binding-name }}" "${ARTIFACT_PATHS[@]}"
+        python3 "$VALIDATE_SCRIPT" "$BINDING_NAME" "${ARTIFACT_PATHS[@]}"
 
     - name: Save binding to cache
       if: env.CACHE_HIT == 'false'

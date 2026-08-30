@@ -163,8 +163,10 @@ runs:
       if: runner.os == 'Windows'
       shell: bash
       working-directory: ${{ inputs.package-dir }}
+      env:
+        DOCK_PLATFORM: ${{ inputs.dock-platform }}
       run: |
-        if [ -n "${{ inputs.dock-platform }}" ]; then
+        if [ -n "$DOCK_PLATFORM" ]; then
           # Cross-compile for Windows via Docker using rb-sys-dock.
           # The rb-sys-dock container ships its own Ruby toolchain; bundler
           # must `install` inside the container before `exec rake` so the
@@ -173,7 +175,7 @@ runs:
           gem install rb_sys
           # CARGO_NET_FROZEN enforces Cargo.lock (equivalent to --locked) so transitive
           # deps don't silently re-resolve (e.g. time 0.3.48 vs cookie 0.18.1's 0.3.47).
-          rb-sys-dock --platform "${{ inputs.dock-platform }}" -- bash -c "export CARGO_NET_FROZEN=true && bundle install --jobs=4 --retry=3 && bundle exec rake compile && bundle exec rake build"
+          rb-sys-dock --platform "$DOCK_PLATFORM" -- bash -c "export CARGO_NET_FROZEN=true && bundle install --jobs=4 --retry=3 && bundle exec rake compile && bundle exec rake build"
         else
           # Native build via MSYS2/mingw (fallback if dock-platform not specified)
           bundle exec rake compile

@@ -37,20 +37,28 @@ runs:
     - name: Clean cache directories (cache disabled)
       if: inputs.enable-cache != 'true'
       shell: bash
-      run: ${{ github.action_path }}/scripts/clean-dirs.sh "${{ inputs.label }}" "${{ inputs.cache-dir-prefix }}"
+      env:
+        TESSERACT_LABEL: ${{ inputs.label }}
+        TESSERACT_CACHE_DIR_PREFIX: ${{ inputs.cache-dir-prefix }}
+      run: ${{ github.action_path }}/scripts/clean-dirs.sh "$TESSERACT_LABEL" "$TESSERACT_CACHE_DIR_PREFIX"
 
     - name: Setup cache directories
       if: inputs.enable-cache == 'true'
       shell: bash
-      run: ${{ github.action_path }}/scripts/setup-dirs.sh "${{ inputs.label }}" "${{ inputs.cache-dir-prefix }}"
+      env:
+        TESSERACT_LABEL: ${{ inputs.label }}
+        TESSERACT_CACHE_DIR_PREFIX: ${{ inputs.cache-dir-prefix }}
+      run: ${{ github.action_path }}/scripts/setup-dirs.sh "$TESSERACT_LABEL" "$TESSERACT_CACHE_DIR_PREFIX"
 
     - name: Resolve cache key paths
       id: cache-key-paths
       if: inputs.enable-cache == 'true'
       shell: bash
+      env:
+        TESSERACT_CRATE_TOML: ${{ inputs.tesseract-crate-toml }}
       run: |
         set -euo pipefail
-        crate_dir="$(dirname "${{ inputs.tesseract-crate-toml }}")"
+        crate_dir="$(dirname "$TESSERACT_CRATE_TOML")"
         echo "build-rs=${crate_dir}/build.rs" >> "$GITHUB_OUTPUT"
 
     - name: Cache tesseract build cache
@@ -67,9 +75,15 @@ runs:
     - name: Clean per-target Tesseract cache
       if: inputs.rust-target != ''
       shell: bash
-      run: ${{ github.action_path }}/scripts/clean-target-cache.sh "${{ inputs.rust-target }}"
+      env:
+        TESSERACT_RUST_TARGET: ${{ inputs.rust-target }}
+      run: ${{ github.action_path }}/scripts/clean-target-cache.sh "$TESSERACT_RUST_TARGET"
 
     - name: Set outputs and environment
       id: set-outputs
       shell: bash
-      run: ${{ github.action_path }}/scripts/set-outputs.sh "${{ inputs.label }}" "${{ inputs.enable-cache }}" "${{ inputs.cache-dir-prefix }}"
+      env:
+        TESSERACT_LABEL: ${{ inputs.label }}
+        TESSERACT_ENABLE_CACHE: ${{ inputs.enable-cache }}
+        TESSERACT_CACHE_DIR_PREFIX: ${{ inputs.cache-dir-prefix }}
+      run: ${{ github.action_path }}/scripts/set-outputs.sh "$TESSERACT_LABEL" "$TESSERACT_ENABLE_CACHE" "$TESSERACT_CACHE_DIR_PREFIX"

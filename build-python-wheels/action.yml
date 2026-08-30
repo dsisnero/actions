@@ -100,8 +100,9 @@ runs:
 
     - name: Build wheels
       shell: bash
-      run: python -m cibuildwheel --output-dir wheelhouse "${{ inputs.package-dir }}"
+      run: python -m cibuildwheel --output-dir wheelhouse "$PACKAGE_DIR"
       env:
+        PACKAGE_DIR: ${{ inputs.package-dir }}
         CIBW_BUILD: ${{ inputs.cibw-build }}
         CIBW_BEFORE_ALL_LINUX: >
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y &&
@@ -146,8 +147,10 @@ runs:
       if: inputs.upload-artifact == 'true'
       id: artifact
       shell: bash
+      env:
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
-        NAME="${{ inputs.artifact-name }}"
+        NAME="$ARTIFACT_NAME"
         if [[ -z "$NAME" ]]; then
           NAME="wheels-${RUNNER_OS}"
         fi

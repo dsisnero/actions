@@ -29,25 +29,31 @@ runs:
 
     - name: Build native library
       shell: bash
+      env:
+        FFI_CRATE_NAME: ${{ inputs.ffi-crate-name }}
+        FFI_LIB_NAME: ${{ inputs.ffi-lib-name }}
+        JAVA_PACKAGE_DIR: ${{ inputs.java-package-dir }}
       run: |
         set -euo pipefail
-        cargo build --locked --release --package "${{ inputs.ffi-crate-name }}"
-        mkdir -p "${{ inputs.java-package-dir }}/src/main/resources"
+        cargo build --locked --release --package "$FFI_CRATE_NAME"
+        mkdir -p "$JAVA_PACKAGE_DIR/src/main/resources"
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          cp "target/release/${{ inputs.ffi-lib-name }}.dll" "${{ inputs.java-package-dir }}/src/main/resources/"
+          cp "target/release/${FFI_LIB_NAME}.dll" "$JAVA_PACKAGE_DIR/src/main/resources/"
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
-          cp "target/release/lib${{ inputs.ffi-lib-name }}.dylib" "${{ inputs.java-package-dir }}/src/main/resources/"
+          cp "target/release/lib${FFI_LIB_NAME}.dylib" "$JAVA_PACKAGE_DIR/src/main/resources/"
         else
-          cp "target/release/lib${{ inputs.ffi-lib-name }}.so" "${{ inputs.java-package-dir }}/src/main/resources/"
+          cp "target/release/lib${FFI_LIB_NAME}.so" "$JAVA_PACKAGE_DIR/src/main/resources/"
         fi
 
     - name: Run Java tests
       shell: bash
       working-directory: ${{ inputs.java-package-dir }}
+      env:
+        JAVA_PACKAGE_DIR: ${{ inputs.java-package-dir }}
       run: |
         set -euo pipefail
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          export PATH="${GITHUB_WORKSPACE}/${{ inputs.java-package-dir }}/src/main/resources:${PATH}"
+          export PATH="${GITHUB_WORKSPACE}/${JAVA_PACKAGE_DIR}/src/main/resources:${PATH}"
         fi
         MAVEN_OPTS="${MAVEN_OPTS:-} --enable-native-access=ALL-UNNAMED -Dsun.misc.unsafe.memory.access=allow" \
           mvn -B -f pom.xml -Dgpg.skip=true clean test

@@ -75,8 +75,11 @@ runs:
     - name: Set output
       id: publish
       shell: bash
+      env:
+        VERSION_PUBLISHED: ${{ steps.validate.outputs.version_published }}
+        PYPI_DRY_RUN: ${{ inputs.dry-run }}
       run: |
-        if [ "${{ steps.validate.outputs.version_published }}" = "true" ] || [ "${{ inputs.dry-run }}" = "true" ]; then
+        if [ "$VERSION_PUBLISHED" = "true" ] || [ "$PYPI_DRY_RUN" = "true" ]; then
           echo "published=false" >> "$GITHUB_OUTPUT"
         else
           echo "published=true" >> "$GITHUB_OUTPUT"

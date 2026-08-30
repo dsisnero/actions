@@ -36,9 +36,12 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      env:
+        FROZEN_LOCKFILE: ${{ inputs.frozen-lockfile }}
+        IGNORE_SCRIPTS: ${{ inputs.ignore-scripts }}
       run: |
         args=()
-        if [ "${{ inputs.frozen-lockfile }}" = "true" ]; then
+        if [ "$FROZEN_LOCKFILE" = "true" ]; then
           args+=(--frozen-lockfile)
         else
           # pnpm defaults frozen-lockfile=true in CI; pass the explicit negation
@@ -47,7 +50,7 @@ runs:
           # cannot be recorded in the lockfile).
           args+=(--no-frozen-lockfile)
         fi
-        if [ "${{ inputs.ignore-scripts }}" = "true" ]; then
+        if [ "$IGNORE_SCRIPTS" = "true" ]; then
           args+=(--ignore-scripts)
         fi
         pnpm install "${args[@]}"

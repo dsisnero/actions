@@ -56,8 +56,10 @@ runs:
 
     - name: Pin Python version for uv
       shell: bash
+      env:
+        PYTHON_VERSION: ${{ inputs.python-version }}
       run: |
-        bash "${GITHUB_ACTION_PATH}/scripts/pin-python.sh" "${{ inputs.python-version }}"
+        bash "${GITHUB_ACTION_PATH}/scripts/pin-python.sh" "$PYTHON_VERSION"
 
     - name: Install Python dependencies
       shell: bash

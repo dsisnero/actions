@@ -13,6 +13,16 @@ All notable changes to xberg-io/actions are documented in this file.
   `golangci-lint-version` is now passed through `env:` instead of being interpolated into `run:`,
   matching the existing `python-extra-projects` pattern, and is validated against a semver shape
   before use.
+- ~20 composite actions (`build-and-cache-binding`, `build-docs`, `build-node-napi`,
+  `build-python-wheels`, `build-ruby-gem`, `build-wasm-package`, `cache-binding-artifact`,
+  `cleanup-rust-cache`, `ensure-gh`, `install-alef`, `install-task`, `lint-docs`, `publish-pypi`,
+  `setup-go-cgo-env`, `setup-maven`, `setup-node-workspace`, `setup-onnx-runtime`,
+  `setup-python-env`, `setup-r`, `setup-rust`, `setup-tesseract-cache`, `setup-zig`,
+  `test-java-ffi`, `verify-ai-rulez-plugin`) now route every caller-supplied data input through
+  `env:` instead of splicing `${{ inputs.* }}` directly into `run:`, closing the same
+  script-injection surface as the golangci-lint fix above. Documented "run this command"
+  contracts (`build-command`, `install-command`, `pre-run-command`) are left as direct splices —
+  that is their intended arbitrary-command contract, not a defect.
 
 ### Fixed
 

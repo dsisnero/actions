@@ -14,10 +14,16 @@ runs:
   steps:
     - name: Cleanup build artifacts
       shell: bash
+      env:
+        LARGE_ARTIFACT_PATTERNS: ${{ inputs.large-artifact-patterns }}
+        MAX_LIB_SIZE: ${{ inputs.max-lib-size }}
       run: |
-        # Remove additional large artifacts specified by consumer
-        if [ -n "${{ inputs.large-artifact-patterns }}" ]; then
-          echo "${{ inputs.large-artifact-patterns }}" | while IFS= read -r pattern; do
+        # Remove additional large artifacts specified by consumer. Each line is an
+        # unquoted glob pattern by contract (e.g. "target/*.o"), so this deliberately
+        # leaves $pattern unquoted for glob expansion rather than treating it as a
+        # literal path.
+        if [ -n "$LARGE_ARTIFACT_PATTERNS" ]; then
+          echo "$LARGE_ARTIFACT_PATTERNS" | while IFS= read -r pattern; do
             if [ -n "$pattern" ]; then
               rm -rf $pattern 2>/dev/null || true
               echo "Removed: $pattern"
@@ -26,10 +32,10 @@ runs:
         fi
 
         # Remove large compiled libraries
-        find target -type f -name "*.rlib" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.so" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.dylib" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.dll" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.rlib" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.so" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.dylib" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.dll" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
 
         # Remove incremental compilation cache
         rm -rf target/*/incremental 2>/dev/null || true

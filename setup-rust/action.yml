@@ -58,12 +58,14 @@ runs:
   steps:
     - name: Setup Rust
       shell: bash
+      env:
+        RUST_TOOLCHAIN_INPUT: ${{ inputs.toolchain }}
       run: |
         # When a bare toolchain channel (e.g., 1.95) is provided without
         # architecture, append the runner's arch to ensure macOS-arm64
         # installs the correct triple. actions-rust-lang doesn't do this
         # automatically, leading to "not installed for" errors.
-        toolchain="${{ inputs.toolchain }}"
+        toolchain="$RUST_TOOLCHAIN_INPUT"
         if [[ -n "$toolchain" ]] && [[ "$toolchain" != *"-"* ]]; then
           arch="${{ runner.arch }}"
           if [[ "$arch" == "ARM64" ]]; then
@@ -99,8 +101,10 @@ runs:
 
     - name: Verify Rust installation
       shell: bash
+      env:
+        RUST_TARGET: ${{ inputs.target }}
       run: |
-        "$GITHUB_ACTION_PATH/scripts/verify-install.sh" "${{ inputs.target }}"
+        "$GITHUB_ACTION_PATH/scripts/verify-install.sh" "$RUST_TARGET"
 
     - name: Install protoc
       shell: bash
@@ -152,8 +156,11 @@ runs:
 
     - name: Configure Rust flags
       shell: bash
+      env:
+        RUST_USE_SCCACHE: ${{ inputs.use-sccache }}
+        RUST_MACOS_DYNAMIC_LOOKUP: ${{ inputs.macos-dynamic-lookup }}
       run: |
-        "$GITHUB_ACTION_PATH/scripts/configure-flags.sh" "${{ inputs.use-sccache }}" "${{ inputs.macos-dynamic-lookup }}"
+        "$GITHUB_ACTION_PATH/scripts/configure-flags.sh" "$RUST_USE_SCCACHE" "$RUST_MACOS_DYNAMIC_LOOKUP"
 
     - name: Harden cargo network retries
       shell: bash
@@ -203,8 +210,11 @@ runs:
     - name: Add Rust target
       if: inputs.target != ''
       shell: bash
+      env:
+        RUST_TARGET: ${{ inputs.target }}
+        RUST_CONFIGURE_MUSL_CC: ${{ inputs.configure-musl-cc }}
       run: |
-        "$GITHUB_ACTION_PATH/scripts/add-target.sh" "${{ inputs.target }}" "${{ inputs.configure-musl-cc }}"
+        "$GITHUB_ACTION_PATH/scripts/add-target.sh" "$RUST_TARGET" "$RUST_CONFIGURE_MUSL_CC"
 
     - name: Clean stale fingerprints
       shell: bash

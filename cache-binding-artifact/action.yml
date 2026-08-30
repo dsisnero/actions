@@ -36,12 +36,15 @@ runs:
   steps:
     - name: Validate inputs
       shell: bash
+      env:
+        CACHE_OPERATION: ${{ inputs.operation }}
+        CACHE_BINDING_NAME: ${{ inputs.binding-name }}
       run: |
-        if [[ "${{ inputs.operation }}" != "restore" && "${{ inputs.operation }}" != "save" ]]; then
+        if [[ "$CACHE_OPERATION" != "restore" && "$CACHE_OPERATION" != "save" ]]; then
           echo "Error: operation must be 'restore' or 'save'"
           exit 1
         fi
-        echo "Binding: ${{ inputs.binding-name }}, Operation: ${{ inputs.operation }}"
+        echo "Binding: $CACHE_BINDING_NAME, Operation: $CACHE_OPERATION"
 
     - name: Restore cache
       id: cache-restore
@@ -58,14 +61,18 @@ runs:
     - name: Report cache restore result
       if: inputs.operation == 'restore'
       shell: bash
+      env:
+        CACHE_BINDING_NAME: ${{ inputs.binding-name }}
+        CACHE_HIT: ${{ steps.cache-restore.outputs.cache-hit }}
+        CACHE_MATCHED_KEY: ${{ steps.cache-restore.outputs.cache-matched-key }}
       run: |
-        if [[ "${{ steps.cache-restore.outputs.cache-hit }}" == "true" ]]; then
-          echo "Cache HIT (exact match) for ${{ inputs.binding-name }}"
-        elif [[ -n "${{ steps.cache-restore.outputs.cache-matched-key }}" ]]; then
-          echo "Cache PARTIAL HIT for ${{ inputs.binding-name }}"
-          echo "  Matched key: ${{ steps.cache-restore.outputs.cache-matched-key }}"
+        if [[ "$CACHE_HIT" == "true" ]]; then
+          echo "Cache HIT (exact match) for $CACHE_BINDING_NAME"
+        elif [[ -n "$CACHE_MATCHED_KEY" ]]; then
+          echo "Cache PARTIAL HIT for $CACHE_BINDING_NAME"
+          echo "  Matched key: $CACHE_MATCHED_KEY"
         else
-          echo "Cache MISS for ${{ inputs.binding-name }}"
+          echo "Cache MISS for $CACHE_BINDING_NAME"
         fi
 
     - name: Save cache
@@ -80,5 +87,8 @@ runs:
     - name: Report cache save result
       if: inputs.operation == 'save'
       shell: bash
+      env:
+        CACHE_BINDING_NAME: ${{ inputs.binding-name }}
+        CACHE_KEY: ${{ inputs.cache-key }}
       run: |
-        echo "Saved ${{ inputs.binding-name }} to cache: ${{ inputs.cache-key }}"
+        echo "Saved $CACHE_BINDING_NAME to cache: $CACHE_KEY"
