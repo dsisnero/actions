@@ -51,6 +51,13 @@ All notable changes to xberg-io/actions are documented in this file.
   flag), starts with `/` (absolute), or contains `..` (traversal), and glob expansion happens from
   *inside* `target/` so even a permissive pattern can only ever match paths under it.
 
+- `build-docs`'s `docs-group` input was woven directly into a string that becomes another
+  action's `install-command`, itself later executed as shell. That downstream splice is an
+  intentional "run this command" contract for whoever authors `install-command`, but `docs-group`
+  is only ever supposed to be a uv dependency-group name, not shell text; a hostile value could
+  ride along inside the constructed command. It is now validated against `^[A-Za-z0-9_-]+$` and
+  the constructed command references the validated step output, not the raw input.
+
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of
