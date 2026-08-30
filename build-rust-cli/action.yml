@@ -59,16 +59,41 @@ runs:
         fi
 
         # extra-cargo-args is documented as "additional arguments" (plural): a
-        # space-separated list of flags (e.g. "--features foo --no-default-features"),
-        # not a single opaque token, so blanket-quoting it as one word would change its
-        # contract. It is deliberately word-split into an array via `read -ra` instead
-        # of spliced into the command line: `read -ra` only performs IFS word-splitting
-        # on the variable's *value* — it never re-parses that value for shell
-        # metacharacters (;, $(), `, |, &&, etc.), so a hostile value becomes at worst
-        # extra literal argv tokens handed to cargo, never a second command. ~keep
+        # space-separated (or multi-line) list of flags, e.g. "--features foo bar" or
+        # "--features foo\n--no-default-features", not a single opaque token, so
+        # blanket-quoting it as one word would change its contract.
+        #
+        # `read -ra <<< "$VAR"` was tried first and rejected: it only performs IFS
+        # word-splitting on the first line, silently dropping every subsequent line, and
+        # it does not honor quotes, so `--features "foo bar"` splits into the two
+        # tokens `"foo` and `bar"` (literal quote characters) instead of one `foo bar`
+        # token. Silent data loss on legitimate multi-line/quoted input is worse than
+        # the injection it was meant to fix.
+        #
+        # xargs -n1 does honor shell-style quoting and processes every line, so it is
+        # used to split the value into one argv entry per line instead: it never
+        # re-executes the value (no `eval`, no re-parsing for `;`, `$()`, backticks,
+        # `|`, `&&` as shell syntax — those become literal characters inside a token),
+        # so a hostile value becomes at worst extra literal argv tokens handed to cargo,
+        # never a second command.
+        #
+        # Two deliberate, tested trade-offs:
+        # - An unbalanced quote makes xargs exit non-zero ("unterminated quote"); that
+        #   is caught explicitly below and fails the step loudly rather than silently
+        #   truncating the value, which is the right failure mode for malformed input.
+        # - xargs also treats a backslash as a quoting escape, so a legitimate value
+        #   containing a literal backslash (e.g. `foo\bar`) is collapsed to `foobar`.
+        #   Cargo flags/feature names do not need literal backslashes in practice; a
+        #   caller who does needs a different mechanism, not this input. ~keep
         declare -a EXTRA_ARGS=()
         if [[ -n "$RUST_EXTRA_CARGO_ARGS" ]]; then
-          read -ra EXTRA_ARGS <<< "$RUST_EXTRA_CARGO_ARGS"
+          extra_cargo_args_split="$(printf '%s' "$RUST_EXTRA_CARGO_ARGS" | xargs -n1 printf '%s\n')" || {
+            echo "::error::extra-cargo-args could not be parsed as shell-style arguments (unbalanced quote?)" >&2
+            exit 1
+          }
+          while IFS= read -r extra_cargo_arg; do
+            EXTRA_ARGS+=("$extra_cargo_arg")
+          done <<< "$extra_cargo_args_split"
         fi
 
         "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"

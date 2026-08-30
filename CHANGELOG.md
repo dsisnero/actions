@@ -23,11 +23,6 @@ All notable changes to xberg-io/actions are documented in this file.
   script-injection surface as the golangci-lint fix above. Documented "run this command"
   contracts (`build-command`, `install-command`, `pre-run-command`) are left as direct splices —
   that is their intended arbitrary-command contract, not a defect.
-- `build-rust-cli`'s `extra-cargo-args` was spliced unquoted into the cargo invocation, adding
-  word-splitting on top of the raw substitution, in the CLI release path. It is now word-split
-  into a bash array via `read -ra` after being passed through `env:`, preserving its documented
-  multi-flag contract (e.g. `--features foo --no-default-features`) while making shell
-  metacharacters in the value inert argv tokens instead of a second command.
 - `list-language-definitions`'s `definitions-path` had a double quote-breakout surface: it sat
   inside both a bash `"..."` argument and an embedded Python string literal, so closing only one
   layer would have left it exploitable. The path is now passed as `sys.argv[1]` rather than
@@ -40,7 +35,14 @@ All notable changes to xberg-io/actions are documented in this file.
   `cli-binaries-musl`), `reusable-binstall-verify.yml`, and `reusable-check-registries.yml` now
   declare explicit least-privilege `permissions: contents: read` instead of inheriting whatever
   default `GITHUB_TOKEN` scope the caller repo or org has configured.
-
+- `build-rust-cli`'s `extra-cargo-args` handling changed twice: the first fix (`read -ra`)
+  regressed correctness — it silently dropped every line but the first of a multi-line value and
+  did not honor quoting, so `--features "foo bar"` split into the two literal tokens `"foo` and
+  `bar"`. It now uses `xargs -n1` to split the value, which honors quoting and processes every
+  line, while still never re-executing the value as shell (metacharacters land as literal argv
+  text). An unbalanced quote now fails the step loudly instead of silently truncating the value;
+  a literal backslash in the value is treated as an escape by `xargs` and collapsed, a documented,
+  accepted trade-off.
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of
