@@ -23,6 +23,11 @@ All notable changes to xberg-io/actions are documented in this file.
   script-injection surface as the golangci-lint fix above. Documented "run this command"
   contracts (`build-command`, `install-command`, `pre-run-command`) are left as direct splices —
   that is their intended arbitrary-command contract, not a defect.
+- `build-rust-cli`'s `extra-cargo-args` was spliced unquoted into the cargo invocation, adding
+  word-splitting on top of the raw substitution, in the CLI release path. It is now word-split
+  into a bash array via `read -ra` after being passed through `env:`, preserving its documented
+  multi-flag contract (e.g. `--features foo --no-default-features`) while making shell
+  metacharacters in the value inert argv tokens instead of a second command.
 
 ### Fixed
 

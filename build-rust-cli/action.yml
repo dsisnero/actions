@@ -32,32 +32,49 @@ runs:
     - name: Build CLI binary
       id: build
       shell: bash
+      env:
+        RUST_PACKAGE_NAME: ${{ inputs.package-name }}
+        RUST_BINARY_NAME: ${{ inputs.binary-name }}
+        RUST_TARGET: ${{ inputs.target }}
+        RUST_GLIBC_VERSION: ${{ inputs.glibc-version }}
+        RUST_EXTRA_CARGO_ARGS: ${{ inputs.extra-cargo-args }}
       run: |
         set -euo pipefail
-        TARGET_FLAG=""
         TARGET_DIR="target/release"
-        if [[ -n "${{ inputs.target }}" ]]; then
+        declare -a CARGO_CMD=(cargo build)
+        declare -a TARGET_FLAG=()
+        if [[ -n "$RUST_TARGET" ]]; then
           # Use zigbuild for linux-gnu targets with glibc floor lowering
-          if [[ "${{ inputs.target }}" == *"-linux-gnu" ]] && [[ -n "${{ inputs.glibc-version }}" ]]; then
-            CARGO_CMD="cargo zigbuild"
-            GLIBC_SUFFIXED_TARGET="${{ inputs.target }}.${{ inputs.glibc-version }}"
-            TARGET_FLAG="--target ${GLIBC_SUFFIXED_TARGET}"
+          if [[ "$RUST_TARGET" == *"-linux-gnu" ]] && [[ -n "$RUST_GLIBC_VERSION" ]]; then
+            CARGO_CMD=(cargo zigbuild)
+            GLIBC_SUFFIXED_TARGET="${RUST_TARGET}.${RUST_GLIBC_VERSION}"
+            TARGET_FLAG=(--target "$GLIBC_SUFFIXED_TARGET")
             # Artifacts are emitted to target/<base-triple>/release, not target/<base-triple>.glibc/release
-            TARGET_DIR="target/${{ inputs.target }}/release"
-            echo "[build-rust-cli] glibc floor: ${{ inputs.glibc-version }} (target: ${GLIBC_SUFFIXED_TARGET})"
+            TARGET_DIR="target/${RUST_TARGET}/release"
+            echo "[build-rust-cli] glibc floor: ${RUST_GLIBC_VERSION} (target: ${GLIBC_SUFFIXED_TARGET})"
           else
-            CARGO_CMD="cargo build"
-            TARGET_FLAG="--target ${{ inputs.target }}"
-            TARGET_DIR="target/${{ inputs.target }}/release"
+            TARGET_FLAG=(--target "$RUST_TARGET")
+            TARGET_DIR="target/${RUST_TARGET}/release"
           fi
-        else
-          CARGO_CMD="cargo build"
         fi
 
-        ${CARGO_CMD} --locked --release --package "${{ inputs.package-name }}" $TARGET_FLAG ${{ inputs.extra-cargo-args }}
+        # extra-cargo-args is documented as "additional arguments" (plural): a
+        # space-separated list of flags (e.g. "--features foo --no-default-features"),
+        # not a single opaque token, so blanket-quoting it as one word would change its
+        # contract. It is deliberately word-split into an array via `read -ra` instead
+        # of spliced into the command line: `read -ra` only performs IFS word-splitting
+        # on the variable's *value* — it never re-parses that value for shell
+        # metacharacters (;, $(), `, |, &&, etc.), so a hostile value becomes at worst
+        # extra literal argv tokens handed to cargo, never a second command. ~keep
+        declare -a EXTRA_ARGS=()
+        if [[ -n "$RUST_EXTRA_CARGO_ARGS" ]]; then
+          read -ra EXTRA_ARGS <<< "$RUST_EXTRA_CARGO_ARGS"
+        fi
+
+        "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"
 
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${{ inputs.binary-name }}.exe" >> "$GITHUB_OUTPUT"
+          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${RUST_BINARY_NAME}.exe" >> "$GITHUB_OUTPUT"
         else
-          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${{ inputs.binary-name }}" >> "$GITHUB_OUTPUT"
+          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${RUST_BINARY_NAME}" >> "$GITHUB_OUTPUT"
         fi
