@@ -36,6 +36,10 @@ All notable changes to xberg-io/actions are documented in this file.
   ref in that repo (resolves to a different commit than any versioned release), giving no
   protection against an upstream compromise or bad push. Pinned to the commit SHA behind the
   current `v1.14.0` release: a GitHub-verified, PGP-signed annotated tag, audited 2026-08-30.
+- `reusable-cli-release.yml`'s build jobs (`cli-binaries`, `cli-binaries-extra`,
+  `cli-binaries-musl`), `reusable-binstall-verify.yml`, and `reusable-check-registries.yml` now
+  declare explicit least-privilege `permissions: contents: read` instead of inheriting whatever
+  default `GITHUB_TOKEN` scope the caller repo or org has configured.
 
 ### Fixed
 

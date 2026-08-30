@@ -84,6 +84,8 @@ jobs:
     name: Build CLI binary (${{ matrix.platform.target }})
     runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 180
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -148,6 +150,8 @@ jobs:
     continue-on-error: true
     runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 180
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -212,6 +216,8 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
