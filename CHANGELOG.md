@@ -58,6 +58,14 @@ All notable changes to xberg-io/actions are documented in this file.
   ride along inside the constructed command. It is now validated against `^[A-Za-z0-9_-]+$` and
   the constructed command references the validated step output, not the raw input.
 
+- `build-python-wheels`'s `build-libheif` input was spliced directly into the multi-line
+  `CIBW_BEFORE_ALL_LINUX` env value, which is itself later executed as shell inside the manylinux
+  container by cibuildwheel. That splice happens at the GitHub Actions YAML-substitution layer
+  before the container even exists, so the container boundary provided no protection. It is now
+  validated as a strict `true`/`false` boolean, set as an ordinary env var, and forwarded into the
+  container unmodified via `CIBW_ENVIRONMENT_PASS_LINUX`; the script reads it as a real shell
+  variable evaluated only inside the container's own shell.
+
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of

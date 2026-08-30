@@ -84,6 +84,22 @@ runs:
       shell: bash
       run: python -m pip install cibuildwheel==3.2.0
 
+    # build-libheif gates a large privileged-looking shell block (yum/dnf install, curl,
+    # cmake/make as root inside the manylinux container) in CIBW_BEFORE_ALL_LINUX below.
+    # It is documented as a strict boolean, so validate it as one before anything else
+    # touches it — belt-and-suspenders alongside routing it through a real env var
+    # instead of a YAML-level splice (see the CIBW_BEFORE_ALL_LINUX comment). ~keep
+    - name: Validate build-libheif
+      shell: bash
+      env:
+        BUILD_LIBHEIF: ${{ inputs.build-libheif }}
+      run: |
+        set -euo pipefail
+        if [[ "$BUILD_LIBHEIF" != "true" && "$BUILD_LIBHEIF" != "false" ]]; then
+          echo "::error::build-libheif must be 'true' or 'false', got: $BUILD_LIBHEIF" >&2
+          exit 1
+        fi
+
     - name: Resolve linker for native arm64 builds
       id: linker-config
       shell: bash
@@ -104,10 +120,24 @@ runs:
       env:
         PACKAGE_DIR: ${{ inputs.package-dir }}
         CIBW_BUILD: ${{ inputs.cibw-build }}
+        # build-libheif must reach the manylinux container as a real environment
+        # variable, never as literal text baked into the CIBW_BEFORE_ALL_LINUX script.
+        # `${{ inputs.build-libheif }}` is a YAML-level substitution performed by GitHub
+        # Actions before this step (or the container) even exists, so splicing it
+        # directly into the script string here would let a value containing shell
+        # metacharacters run as part of that script the same way it would in a `run:`
+        # block — the container boundary doesn't help, because the injection would
+        # already be baked into the text before the container starts. BUILD_LIBHEIF is
+        # instead set as an ordinary env var (already validated above) and forwarded
+        # into the Linux container unmodified via CIBW_ENVIRONMENT_PASS_LINUX, which
+        # cibuildwheel documents for exactly this purpose; the script below reads it as
+        # a real shell variable, evaluated only inside the container's own shell. ~keep
+        BUILD_LIBHEIF: ${{ inputs.build-libheif }}
+        CIBW_ENVIRONMENT_PASS_LINUX: BUILD_LIBHEIF
         CIBW_BEFORE_ALL_LINUX: >
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y &&
           source ~/.cargo/env &&
-          if [ "${{ inputs.build-libheif }}" = "true" ]; then
+          if [ "$BUILD_LIBHEIF" = "true" ]; then
           PKG=$(command -v dnf >/dev/null && echo dnf || echo yum) &&
           $PKG install -y cmake gcc-c++ numactl-devel &&
           for codec in libaom-devel libdav1d-devel libde265-devel x265-devel; do $PKG install -y "$codec" || true; done &&
