@@ -4,6 +4,16 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- `reusable-validate.yml`'s `golangci-lint` installer now fetches `install.sh` pinned to an
+  audited upstream commit SHA instead of the `golangci-lint-version` tag: that tag is a
+  lightweight (unsigned) ref that anyone with push access upstream can force-move, so the prior
+  "immutable version tag" comment overstated the guarantee. The caller-supplied
+  `golangci-lint-version` is now passed through `env:` instead of being interpolated into `run:`,
+  matching the existing `python-extra-projects` pattern, and is validated against a semver shape
+  before use.
+
 ## [1.10.2] - 2026-08-30
 
 ### Fixed

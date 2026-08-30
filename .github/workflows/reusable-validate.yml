@@ -294,14 +294,35 @@ jobs:
       #
       # NOT `go install`: that resolves the module through sum.golang.org, which failed
       # byte-identically across several days and unrelated commits (same two modules, same tile
-      # paths) — a deterministic failure, not a flake, so retrying never cleared it. The install
-      # script is fetched at the immutable version tag, never at `master`: a moving ref here would
-      # let an upstream change run in every consumer's CI without review. ~keep
+      # paths) — a deterministic failure, not a flake, so retrying never cleared it.
+      #
+      # The install *script* is fetched pinned to an audited upstream commit SHA
+      # (c0d3ddc9cf3faa61a4e378e879ece580256d76e5), not a version tag: a git tag — including
+      # `v2.12.2` — is a ref that can be force-moved by anyone with push access to that repo
+      # (confirmed: `v2.12.2` there is a lightweight tag, so no signed tag object even records
+      # what it originally pointed at); pinning to a commit is what makes the fetched bytes
+      # immutable. That SHA was audited on 2026-08-30: it is exactly what `v2.12.2` resolves to
+      # today, and its `install.sh` is the standard client9/shlib-derived godownloader script —
+      # it downloads a release tarball plus a checksums file and verifies the tarball's sha256
+      # before extracting. The *golangci-lint version installed* is still the caller-controlled
+      # `golangci-lint-version` input, passed as the script's `<tag>` argument — only the
+      # installer script itself is pinned. Bump the SHA here (and re-audit) if this repo's
+      # install.sh is ever intentionally changed upstream. ~keep
       - name: Install golangci-lint
         if: ${{ inputs.setup-go }}
+        env:
+          # ~keep Passed through env, not interpolated into the script: a `${{ }}` expansion
+          # inside `run` is substituted before the shell sees it, so any caller-supplied value
+          # would be executed as shell.
+          GOLANGCI_LINT_VERSION: ${{ inputs.golangci-lint-version }}
         run: |
-          curl -sSfL "https://raw.githubusercontent.com/golangci/golangci-lint/${{ inputs.golangci-lint-version }}/install.sh" | \
-            sh -s -- -b "$(go env GOPATH)/bin" "${{ inputs.golangci-lint-version }}"
+          if ! printf '%s' "$GOLANGCI_LINT_VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::golangci-lint-version '$GOLANGCI_LINT_VERSION' is not a valid semver tag (expected vX.Y.Z)" >&2
+            exit 1
+          fi
+          curl -sSfL "https://raw.githubusercontent.com/golangci/golangci-lint/c0d3ddc9cf3faa61a4e378e879ece580256d76e5/install.sh" \
+            -o /tmp/golangci-lint-install.sh
+          sh /tmp/golangci-lint-install.sh -b "$(go env GOPATH)/bin" "$GOLANGCI_LINT_VERSION"
 
       - name: Set up Ruby
         if: ${{ inputs.setup-ruby }}
