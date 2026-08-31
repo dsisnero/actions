@@ -334,6 +334,31 @@ def test_cleanup_legitimate_pattern_still_deletes_inside_target(tmp_path):
     assert (sandbox / "target" / "keep.txt").exists()
     assert (sandbox / "canary.txt").exists()
 
+def test_cleanup_rejects_pattern_that_escapes_via_symlinked_component(tmp_path):
+    """A pattern that is ordinary relative text still must not delete through a symlink.
+
+    Regression for a residual defect: text-level rejection (leading '-'/'/' , '..') and
+    expanding the glob from inside target/ does not confine anything once a *child of
+    target/* is itself a symlink to somewhere else. `target/escape -> outside/` makes
+    `escape/*.o` perfectly ordinary relative text that matches straight through the symlink.
+    Confinement must be checked on the RESOLVED path of each match, not the pattern text —
+    this builds a real symlink and runs the real extracted run: block against it.
+    """
+    sandbox = _cleanup_sandbox(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.o"
+    victim.write_text("must survive")
+    (sandbox / "target" / "escape").symlink_to(outside, target_is_directory=True)
+
+    env = {"LARGE_ARTIFACT_PATTERNS": "escape/*.o", "MAX_LIB_SIZE": "+999G"}
+    result = _run_step_script(_cleanup_step(), env, cwd=sandbox)
+
+    assert result.returncode == 0, result.stderr
+    assert victim.exists(), "deletion escaped target/ through a symlinked path component"
+    assert victim.read_text() == "must survive"
+    assert "skipping large-artifact-patterns match that resolves outside target/" in result.stderr
+
 
 # ---------------------------------------------------------------------------
 # build-docs: docs-group (blocker 3 — validated before it enters install-command)

@@ -46,10 +46,19 @@ All notable changes to xberg-io/actions are documented in this file.
 - `cleanup-rust-cache`'s `large-artifact-patterns` handling ran `rm -rf $pattern` against each
   caller-supplied line unquoted and unconstrained: a pattern of `--no-preserve-root /` became
   argv to `rm -rf`, an arbitrary-deletion primitive that (independently reproduced during this
-  fix) attempted to delete `/etc/passwd` outside a sandboxed test. Deletion is now confined to
-  `target/`: each pattern is rejected outright if it starts with `-` (would misparse as an `rm`
-  flag), starts with `/` (absolute), or contains `..` (traversal), and glob expansion happens from
-  *inside* `target/` so even a permissive pattern can only ever match paths under it.
+  fix) attempted to delete `/etc/passwd` outside a sandboxed test. Patterns starting with `-`
+  (would misparse as an `rm` flag), `/` (absolute), or containing `..` (traversal) are now
+  rejected outright before any deletion is attempted.
+- `cleanup-rust-cache`'s prior text-level rejection above (leading `-`, `/`, `..`) and expanding
+  the glob from inside `target/` did not actually confine deletion to `target/`, despite an
+  earlier changelog entry here claiming it did: `cd target` provides no containment once a child
+  of `target/` is a symlink to somewhere else (e.g. `target/escape -> /elsewhere`), because a
+  pattern like `escape/*.o` is ordinary relative text that matches straight through the symlink.
+  Confinement is now checked on the *resolved* path, not the pattern text: `target`'s own
+  canonical (symlink-resolved) directory is compared against each glob match's own resolved path
+  via `realpath`, and only a match that resolves under `target/`'s real location is deleted —
+  reproduced against a real `target/escape -> outside/` symlink and a `victim.o` file placed
+  outside `target/`, which the fixed script now leaves untouched.
 
 - `build-docs`'s `docs-group` input was woven directly into a string that becomes another
   action's `install-command`, itself later executed as shell. That downstream splice is an
