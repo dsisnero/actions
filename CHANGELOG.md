@@ -89,6 +89,16 @@ All notable changes to xberg-io/actions are documented in this file.
   yielded one empty line, so a stray empty-string argv entry reached cargo. The guard now checks
   the *split result* for non-emptiness rather than the raw input, so a whitespace-only value now
   contributes exactly zero argv entries, matching the empty-input case.
+- `build-rust-cli`'s whitespace-only-guard fix above traded one defect for another: it also
+  silently dropped a legitimate explicitly quoted empty argument (e.g. `--config ""`). Isolated
+  the mechanism directly (`printf '%s' '--config ""' | xargs -n1 printf '%s\n' | od -c` shows
+  only `--config\n` — the empty line for `""` never leaves xargs): xargs drops a wholly-empty
+  TRAILING token but preserves a leading or middle one, so `--a "" --b ""` kept its first empty
+  and lost its second. A non-empty sentinel is now appended to the value before it reaches xargs,
+  so the value's own true last token is never itself trailing, and the sentinel is popped from the
+  parsed array afterward. This single mechanism satisfies all three requirements at once:
+  whitespace-only collapses to zero entries, a trailing quoted empty survives in position, and
+  injected metacharacters remain inert literal tokens.
 
 ### Fixed
 

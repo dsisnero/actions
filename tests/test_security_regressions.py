@@ -275,6 +275,44 @@ def test_extra_cargo_args_single_flag_produces_expected_argv_count(tmp_path):
     assert extra_only == ["--features", "foo"]
 
 
+def test_extra_cargo_args_trailing_quoted_empty_is_preserved(tmp_path):
+    """A single explicitly quoted empty argument must survive, in position, not be dropped.
+
+    Regression for a second residual defect: the whitespace-only guard (which checks whether
+    the *split result* is non-empty) also silently swallowed a real quoted empty argument,
+    because plain `xargs -n1` drops a wholly-empty TRAILING token while preserving a leading or
+    middle one — isolated with `printf '%s' '--config ""' | xargs -n1 printf '%s\n' | od -c`,
+    which shows only `--config\n` ever leaves xargs; the empty line for `""` never appears.
+    `--config ""` is exactly this shape: two tokens, `--config` and an empty string, with the
+    empty one trailing.
+    """
+    env, argv_file = _cargo_argv_test_env(tmp_path, '--config ""')
+    (tmp_path / "github_output.txt").touch()
+    result = _run_step_script(_build_step(), env, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    extra_only = _extra_only_argv(_read_argv(argv_file))
+    assert len(extra_only) == 2
+    assert extra_only == ["--config", ""]
+
+
+def test_extra_cargo_args_middle_versus_trailing_empty_both_preserved(tmp_path):
+    """Two quoted empties — one middle, one trailing — must both survive, each in position.
+
+    This is the case that most sharply distinguishes the defect from its fix: plain xargs -n1
+    keeps a MIDDLE empty token (between --a and --b) but drops the TRAILING one (after --b), so
+    a test using only a middle empty would have passed against the bug. Both must be present
+    here, at the correct index, for the fix to be proven — never collapsed into a rejoined
+    string, which would hide exactly this position-dependent behavior.
+    """
+    env, argv_file = _cargo_argv_test_env(tmp_path, '--a "" --b ""')
+    (tmp_path / "github_output.txt").touch()
+    result = _run_step_script(_build_step(), env, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    extra_only = _extra_only_argv(_read_argv(argv_file))
+    assert len(extra_only) == 4
+    assert extra_only == ["--a", "", "--b", ""]
+
+
 # ---------------------------------------------------------------------------
 # cleanup-rust-cache: large-artifact-patterns (blocker 2 — confine deletion to target/)
 # ---------------------------------------------------------------------------
@@ -333,6 +371,7 @@ def test_cleanup_legitimate_pattern_still_deletes_inside_target(tmp_path):
     assert not (sandbox / "target" / "big.rlib").exists()
     assert (sandbox / "target" / "keep.txt").exists()
     assert (sandbox / "canary.txt").exists()
+
 
 def test_cleanup_rejects_pattern_that_escapes_via_symlinked_component(tmp_path):
     """A pattern that is ordinary relative text still must not delete through a symlink.

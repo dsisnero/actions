@@ -77,29 +77,57 @@ runs:
         # so a hostile value becomes at worst extra literal argv tokens handed to cargo,
         # never a second command.
         #
-        # Two deliberate, tested trade-offs:
-        # - An unbalanced quote makes xargs exit non-zero ("unterminated quote"); that
-        #   is caught explicitly below and fails the step loudly rather than silently
-        #   truncating the value, which is the right failure mode for malformed input.
+        # Three-way constraint on top of that, all measured directly against this xargs
+        # (BSD and observed-consistent with GNU findutils):
+        #   1. whitespace-only input -> zero argv entries
+        #   2. an explicitly quoted empty argument (e.g. `--config ""`) -> preserved, in
+        #      its original position
+        #   3. hostile metacharacters -> inert literal argv tokens, never a second command
+        # (1) and (3) were handled first by guarding on the split result being non-empty,
+        # but that guard also silently dropped (2): xargs -n1 drops a wholly-empty
+        # TRAILING token (verified with `xargs -n1 printf '%s\n' | od -c`: a lone
+        # trailing `""` never leaves xargs at all) while preserving a leading or middle
+        # empty token, so `--config ""` lost its empty and `--a "" --b ""` kept the first
+        # empty but dropped the second. A non-empty sentinel is appended to the value
+        # before it reaches xargs, which guarantees the value's own true last token is
+        # never itself the trailing one (the sentinel is), so xargs cannot drop it; the
+        # sentinel is then popped off the end of the parsed array. This single mechanism
+        # satisfies all three constraints at once: a whitespace-only value collapses to
+        # just the sentinel, which pops to zero entries; a trailing quoted empty is no
+        # longer trailing when the sentinel follows it, so it survives; and every
+        # injection property of the xargs-based split is unchanged, since the sentinel is
+        # plain text with no shell metacharacters of its own.
+        #
+        # Two further deliberate, tested trade-offs:
+        # - An unbalanced quote makes xargs exit non-zero ("unterminated quote") even with
+        #   the sentinel appended (the still-open quote absorbs it); that is caught
+        #   explicitly below and fails the step loudly rather than silently truncating the
+        #   value, which is the right failure mode for malformed input.
         # - xargs also treats a backslash as a quoting escape, so a legitimate value
         #   containing a literal backslash (e.g. `foo\bar`) is collapsed to `foobar`.
         #   Cargo flags/feature names do not need literal backslashes in practice; a
         #   caller who does needs a different mechanism, not this input. ~keep
         declare -a EXTRA_ARGS=()
         if [[ -n "$RUST_EXTRA_CARGO_ARGS" ]]; then
-          extra_cargo_args_split="$(printf '%s' "$RUST_EXTRA_CARGO_ARGS" | xargs -n1 printf '%s\n')" || {
+          extra_cargo_args_sentinel="__xberg_actions_build_rust_cli_end_of_args__"
+          extra_cargo_args_split="$(printf '%s %s' "$RUST_EXTRA_CARGO_ARGS" "$extra_cargo_args_sentinel" | xargs -n1 printf '%s\n')" || {
             echo "::error::extra-cargo-args could not be parsed as shell-style arguments (unbalanced quote?)" >&2
             exit 1
           }
-          # Guard on the SPLIT RESULT being non-empty, not just the raw input: a
-          # whitespace-only RUST_EXTRA_CARGO_ARGS (e.g. "   ") passes `[[ -n ... ]]` above
-          # but xargs -n1 emits nothing for it, and `while read <<< ""` still yields one
-          # empty line — so without this guard a stray empty argv entry would reach cargo.
-          if [[ -n "$extra_cargo_args_split" ]]; then
-            while IFS= read -r extra_cargo_arg; do
-              EXTRA_ARGS+=("$extra_cargo_arg")
-            done <<< "$extra_cargo_args_split"
+          declare -a extra_cargo_args_raw=()
+          while IFS= read -r extra_cargo_arg; do
+            extra_cargo_args_raw+=("$extra_cargo_arg")
+          done <<< "$extra_cargo_args_split"
+          # The sentinel is always the last element here: it is a single non-empty token
+          # appended after everything else, and a non-empty trailing token is never
+          # dropped by xargs (only a wholly-empty one is). Drop it before use.
+          if [[ ${#extra_cargo_args_raw[@]} -gt 0 ]]; then
+            # Explicit last-index arithmetic instead of bash 4.3+'s negative-index
+            # `array[-1]` syntax, since GitHub-hosted macOS runners' default /bin/bash is
+            # 3.2 (Apple ships no newer GPLv3 bash), which does not support it.
+            unset "extra_cargo_args_raw[${#extra_cargo_args_raw[@]}-1]"
           fi
+          EXTRA_ARGS=("${extra_cargo_args_raw[@]}")
         fi
 
         "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"
