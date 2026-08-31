@@ -91,9 +91,15 @@ runs:
             echo "::error::extra-cargo-args could not be parsed as shell-style arguments (unbalanced quote?)" >&2
             exit 1
           }
-          while IFS= read -r extra_cargo_arg; do
-            EXTRA_ARGS+=("$extra_cargo_arg")
-          done <<< "$extra_cargo_args_split"
+          # Guard on the SPLIT RESULT being non-empty, not just the raw input: a
+          # whitespace-only RUST_EXTRA_CARGO_ARGS (e.g. "   ") passes `[[ -n ... ]]` above
+          # but xargs -n1 emits nothing for it, and `while read <<< ""` still yields one
+          # empty line — so without this guard a stray empty argv entry would reach cargo.
+          if [[ -n "$extra_cargo_args_split" ]]; then
+            while IFS= read -r extra_cargo_arg; do
+              EXTRA_ARGS+=("$extra_cargo_arg")
+            done <<< "$extra_cargo_args_split"
+          fi
         fi
 
         "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"

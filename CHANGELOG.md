@@ -74,6 +74,13 @@ All notable changes to xberg-io/actions are documented in this file.
   particular assert exact argv counts, which is precisely the class of check that would have
   caught the `read -ra` regression above before it shipped.
 
+- `build-rust-cli`'s `extra-cargo-args` handling had a residual defect after the `xargs` fix
+  above: a whitespace-only value (e.g. `"   "`) passed the `[[ -n "$VAR" ]]` non-empty check, but
+  `xargs -n1` emits nothing for it, and the subsequent `while read <<< ""` here-string still
+  yielded one empty line, so a stray empty-string argv entry reached cargo. The guard now checks
+  the *split result* for non-emptiness rather than the raw input, so a whitespace-only value now
+  contributes exactly zero argv entries, matching the empty-input case.
+
 ### Fixed
 
 - `publish-homebrew-source-formulas/scripts/test_render.py` is now part of

@@ -218,15 +218,61 @@ def test_extra_cargo_args_literal_backslash_caveat_is_documented_behavior(tmp_pa
     assert extra == ["--locked", "--release", "--package", "demo-pkg", "--features", "foobar"]
 
 
-def test_extra_cargo_args_empty_produces_no_extra_argv(tmp_path):
+def _extra_only_argv(argv: list[str]) -> list[str]:
+    """The variable-length tail of argv contributed by extra-cargo-args alone.
+
+    argv is always ["--locked", "--release", "--package", "demo-pkg", *extra]: TARGET_FLAG is
+    empty for these tests (RUST_TARGET is unset), so this fixed 4-item prefix is exactly where
+    the extra-cargo-args-derived entries begin.
+    """
+    fixed_prefix = ["--locked", "--release", "--package", "demo-pkg"]
+    extra = argv[argv.index("--locked") :]
+    assert extra[: len(fixed_prefix)] == fixed_prefix
+    return extra[len(fixed_prefix) :]
+
+
+def test_extra_cargo_args_empty_produces_zero_argv_entries(tmp_path):
+    """Cardinality pin: an empty value must contribute exactly 0 argv entries."""
     env, argv_file = _cargo_argv_test_env(tmp_path, "")
     (tmp_path / "github_output.txt").touch()
     result = _run_step_script(_build_step(), env, cwd=tmp_path)
     assert result.returncode == 0, result.stderr
-    argv = _read_argv(argv_file)
-    extra = argv[argv.index("--locked") :]
-    assert extra == ["--locked", "--release", "--package", "demo-pkg"]
-    assert len(extra) == 4
+    extra_only = _extra_only_argv(_read_argv(argv_file))
+    assert len(extra_only) == 0
+    assert extra_only == []
+
+
+def test_extra_cargo_args_whitespace_only_produces_zero_argv_entries(tmp_path):
+    """Cardinality pin: a whitespace-only value must contribute exactly 0 argv entries.
+
+    Regression for a residual defect found after the xargs fix landed: `[[ -n "$VAR" ]]`
+    passes for "   " (non-empty), so the split-and-accumulate logic used to run; xargs -n1
+    emits nothing for whitespace-only input, but `while read <<< ""` still yields one empty
+    line, so exactly one stray empty-string argv entry reached cargo (n=1, argv[0] == "").
+    The fix guards on the *split result* being non-empty, not the raw input.
+    """
+    env, argv_file = _cargo_argv_test_env(tmp_path, "   \t  \n  ")
+    (tmp_path / "github_output.txt").touch()
+    result = _run_step_script(_build_step(), env, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    extra_only = _extra_only_argv(_read_argv(argv_file))
+    assert len(extra_only) == 0
+    assert extra_only == []
+
+
+def test_extra_cargo_args_single_flag_produces_expected_argv_count(tmp_path):
+    """Boundary pin: a normal single-flag value still contributes its correct nonzero count.
+
+    Guards against a fix for the whitespace-only case (e.g. an overzealous strip/skip) that
+    would also — wrongly — swallow legitimate non-whitespace values.
+    """
+    env, argv_file = _cargo_argv_test_env(tmp_path, "--features foo")
+    (tmp_path / "github_output.txt").touch()
+    result = _run_step_script(_build_step(), env, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    extra_only = _extra_only_argv(_read_argv(argv_file))
+    assert len(extra_only) == 2
+    assert extra_only == ["--features", "foo"]
 
 
 # ---------------------------------------------------------------------------
