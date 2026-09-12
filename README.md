@@ -158,6 +158,7 @@ For repositories with compiled binding workspaces, set `prose-dependency-directo
 | Workflow | Description |
 |----------|-------------|
 | `test-unit.yml` | Unit test suite for helper scripts |
+| `test-bats.yml` | Linux and macOS Bats suite for Bash action scripts |
 | `test-integration.yml` | Integration tests for selected composite actions |
 | `test-install-task.yml` | Cross-platform smoke test for `install-task` |
 | `test-free-disk-space.yml` | Smoke test for disk cleanup |
@@ -243,8 +244,21 @@ task setup
 # Run tests (281 tests)
 task test
 
+# Run Bash action tests (requires Bats)
+task test:bats
+
 # Lint
 task lint
 ```
 
-All action scripts are Python 3.10+ with full pytest coverage, ruff linting, and pyrefly type checking.
+Python helpers are tested with pytest; Bash scripts are tested with Bats. Install Bats locally through
+your platform package manager, or use the repository's `install-bats` action in GitHub Actions. The
+action resolves Bats `latest` by default and logs the resolved version; supply a version explicitly to
+reproduce a prior run.
+
+### Shell test policy
+
+Use Bats for Bash scripts on Linux and macOS. Consumer repositories should install it with
+`xberg-io/actions/install-bats` and execute suites with `xberg-io/actions/run-bats`, both pinned to
+an immutable actions revision. PowerShell scripts are not Bats-compatible; their Windows coverage
+belongs in Pester suites and will use a matching setup/run contract in the PowerShell rollout.

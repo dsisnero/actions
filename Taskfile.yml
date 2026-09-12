@@ -30,11 +30,17 @@ tasks:
     desc: Run all tests
     cmds:
       - task: test:unit
+      - task: test:bats
 
   test:unit:
     desc: Run pytest unit tests
     cmds:
       - uv run pytest -v
+
+  test:bats:
+    desc: Run Bats tests for Bash action scripts
+    cmds:
+      - bats --recursive .
 
   test:act:
     desc: Run a specific test workflow locally (usage{{":"}} task test:act -- test-setup-rust.yml)

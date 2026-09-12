@@ -226,6 +226,7 @@ fmt = { exclude = [
 ] }
 commit = { stages = ["commit-msg"] }
 file_safety = { exclude = [
+  "**/*.bats",
   "**/*.lock",
   "**/Cargo.lock",
   "**/go.sum",
@@ -236,7 +237,9 @@ file_safety = { exclude = [
   "packages/go/include/*.h",
   "CHANGELOG.md",
   "**/CHANGELOG.md",
+  "install-bats/scripts/install.sh",
   "publish-maven/action.yml",
+  "run-bats/scripts/run.sh",
 ] }
 
 [tools.shfmt]

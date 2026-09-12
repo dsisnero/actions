@@ -1,0 +1,26 @@
+name: Run Bats
+description: Run a Bats test file or directory contained within the workspace.
+inputs:
+  path:
+    description: Test file or directory, relative to the working directory by default.
+    required: false
+    default: "tests"
+  working-directory:
+    description: Optional workspace-relative directory from which to resolve path.
+    required: false
+    default: ""
+  args:
+    description: Optional newline-delimited Bats arguments. Put one argument on each line.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Run Bats
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: bash "${{ github.action_path }}/scripts/run.sh"

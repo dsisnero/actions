@@ -1,0 +1,92 @@
+name: Test install-bats
+on:
+  push:
+    paths:
+      - "install-bats/**"
+      - ".github/workflows/test-install-bats.yml"
+  pull_request:
+    paths:
+      - "install-bats/**"
+      - ".github/workflows/test-install-bats.yml"
+
+jobs:
+  test-latest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify authenticated release lookup without network
+        shell: bash
+        run: |
+          fixture_dir="${GITHUB_WORKSPACE}/.install-bats-auth-fixture"
+          trap 'rm -rf "$fixture_dir"' EXIT
+          mkdir -p "${fixture_dir}/bin" "${fixture_dir}/install/bats-core-1.2.3/bin"
+          cat >"${fixture_dir}/bin/curl" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          header=""
+          output=""
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --header)
+                header="$2"
+                shift 2
+                ;;
+              --output)
+                output="$2"
+                shift 2
+                ;;
+              *)
+                shift
+                ;;
+            esac
+          done
+          test "$header" = "Authorization: Bearer test-token"
+          cat >"$output" <<'JSON'
+          {"tag_name":"v1.2.3","assets":[],"tarball_url":"https://api.github.com/repos/bats-core/bats-core/tarball/v1.2.3"}
+          JSON
+          SCRIPT
+          cat >"${fixture_dir}/install/bats-core-1.2.3/bin/bats" <<'SCRIPT'
+          #!/usr/bin/env bash
+          echo "Bats 1.2.3"
+          SCRIPT
+          chmod +x "${fixture_dir}/bin/curl" "${fixture_dir}/install/bats-core-1.2.3/bin/bats"
+          : >"${fixture_dir}/github-path"
+          PATH="${fixture_dir}/bin:${PATH}" \
+            GITHUB_TOKEN="test-token" \
+            GITHUB_PATH="${fixture_dir}/github-path" \
+            INPUT_INSTALL_DIR="${fixture_dir}/install" \
+            INPUT_VERSION="1.2.3" \
+            bash install-bats/scripts/install.sh
+          if PATH="${fixture_dir}/bin:${PATH}" \
+            GITHUB_TOKEN=$'test-token\ninvalid' \
+            GITHUB_PATH="${fixture_dir}/github-path" \
+            INPUT_INSTALL_DIR="${fixture_dir}/install" \
+            INPUT_VERSION="1.2.3" \
+            bash install-bats/scripts/install.sh; then
+            echo "expected a token containing a newline to be rejected"
+            exit 1
+          fi
+          if PATH="${fixture_dir}/bin:${PATH}" \
+            GITHUB_TOKEN=$'test-token\rinvalid' \
+            GITHUB_PATH="${fixture_dir}/github-path" \
+            INPUT_INSTALL_DIR="${fixture_dir}/install" \
+            INPUT_VERSION="1.2.3" \
+            bash install-bats/scripts/install.sh; then
+            echo "expected a token containing a carriage return to be rejected"
+            exit 1
+          fi
+          rm -rf "$fixture_dir"
+
+      - name: Install current Bats release
+        uses: ./install-bats
+
+      - name: Verify Bats installation
+        shell: bash
+        run: |
+          bats --version
+          command -v bats

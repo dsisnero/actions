@@ -26,6 +26,7 @@ This will setup the dependencies, and pre-commit hooks via `poly`.
 | `task setup`    | Install dependencies and pre-commit hooks |
 | `task lint`     | Lint actions and workflows                |
 | `task test`     | Run the action test suite                 |
+| `task test:bats`| Run Bash action tests with Bats           |
 | `task validate` | Validate action and workflow metadata     |
 
 ## What to keep in mind

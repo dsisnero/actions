@@ -1,0 +1,60 @@
+name: Test run-bats
+on:
+  push:
+    paths:
+      - "run-bats/**"
+      - ".github/workflows/test-run-bats.yml"
+  pull_request:
+    paths:
+      - "run-bats/**"
+      - ".github/workflows/test-run-bats.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create an offline Bats shim and test fixture
+        shell: bash
+        run: |
+          fixture_dir="${GITHUB_WORKSPACE}/.run-bats-fixture"
+          shim_dir="${GITHUB_WORKSPACE}/.run-bats-bin"
+          mkdir -p "${fixture_dir}/tests" "$shim_dir"
+          touch "${fixture_dir}/tests/sample.bats"
+          cat >"${shim_dir}/bats" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "$@" >"${GITHUB_WORKSPACE}/.run-bats-fixture/invocation.txt"
+          SCRIPT
+          chmod +x "${shim_dir}/bats"
+          echo "$shim_dir" >>"$GITHUB_PATH"
+
+      - name: Run a workspace-contained test path
+        uses: ./run-bats
+        with:
+          path: .run-bats-fixture/tests
+          args: |-
+            --filter
+            matching test
+
+      - name: Verify arguments were passed without word splitting
+        shell: bash
+        run: |
+          invocation=.run-bats-fixture/invocation.txt
+          test "$(sed -n '1p' "$invocation")" = "--filter"
+          test "$(sed -n '2p' "$invocation")" = "matching test"
+          test "$(sed -n '3p' "$invocation")" = "${GITHUB_WORKSPACE}/.run-bats-fixture/tests"
+          test -z "$(sed -n '4p' "$invocation")"
+
+      - name: Reject an external test path
+        id: external-path
+        continue-on-error: true
+        uses: ./run-bats
+        with:
+          path: ../
+
+      - name: Verify external test path was rejected
+        shell: bash
+        run: |
+          test "${{ steps.external-path.outcome }}" = "failure"

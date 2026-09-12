@@ -1,0 +1,43 @@
+name: Bats tests
+
+on:
+  push:
+    paths:
+      - "**/scripts/**"
+      - "**/tests/**"
+      - "install-bats/**"
+      - "run-bats/**"
+      - "Taskfile.yml"
+      - ".github/workflows/test-bats.yml"
+  pull_request:
+    paths:
+      - "**/scripts/**"
+      - "**/tests/**"
+      - "install-bats/**"
+      - "run-bats/**"
+      - "Taskfile.yml"
+      - ".github/workflows/test-bats.yml"
+
+jobs:
+  test:
+    name: Bats on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: ./install-task
+
+      - name: Install Bats
+        uses: ./install-bats
+
+      - name: Run Bash script tests
+        uses: ./run-bats
+        with:
+          path: .
+          args: |-
+            --recursive
