@@ -64,7 +64,7 @@ def expand_artifact_patterns(patterns: str) -> list[Path]:
 def get_release_by_id(owner: str, repo: str, release_id: int, token: str) -> dict[str, Any] | None:
     """Fetch a release by its id. Returns None when the id does not resolve."""
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
-    req = urllib.request.Request(url, headers=get_github_api_headers(token), method="GET")  # noqa: S310
+    req = urllib.request.Request(url, headers=get_github_api_headers(token), method="GET")
     try:
         with urllib.request.urlopen(req) as response:  # noqa: S310
             payload: object = json.loads(response.read().decode("utf-8"))
