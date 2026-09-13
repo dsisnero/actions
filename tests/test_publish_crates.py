@@ -105,6 +105,79 @@ def test_publish_crate_does_not_retry_new_crate_trusted_publishing(monkeypatch):
     assert slept == [], "must not sleep between (non-existent) retries"
 
 
+def test_publish_crate_retries_a_dropped_connection_then_succeeds(monkeypatch):
+    """A transport failure carries no verdict from crates.io, so it must be retried.
+
+    crawlberg v1.6.3 lost its fifth crate to exactly this and forfeited five registries.
+    """
+    outputs = [
+        (
+            1,
+            "error: failed to publish to registry at https://crates.io\n  [35] SSL connect error (Recv failure: Connection reset by peer)",
+        ),
+        (0, ""),
+    ]
+    calls = 0
+
+    def fake_run(cmd: list[str]):
+        nonlocal calls
+        calls += 1
+        return outputs[min(calls - 1, len(outputs) - 1)]
+
+    slept: list[float] = []
+    monkeypatch.setattr(crates_mod, "_run", fake_run)
+    monkeypatch.setattr(crates_mod.time, "sleep", slept.append)
+
+    exit_code, _output = crates_mod.publish_crate("crawlberg-cli", [])
+
+    assert exit_code == 0
+    assert calls == 2, "must retry the dropped connection exactly once before succeeding"
+    assert slept == [crates_mod.PUBLISH_RETRY_DELAY_SECONDS]
+
+
+def test_publish_crate_treats_an_upload_that_landed_before_the_drop_as_published(monkeypatch):
+    """If the upload did land, the retry sees 'already uploaded' and that counts as success."""
+    outputs = [
+        (1, "  [35] SSL connect error (Recv failure: Connection reset by peer)"),
+        (1, "error: crate version 1.6.3 is already uploaded"),
+    ]
+    calls = 0
+
+    def fake_run(cmd: list[str]):
+        nonlocal calls
+        calls += 1
+        return outputs[min(calls - 1, len(outputs) - 1)]
+
+    monkeypatch.setattr(crates_mod, "_run", fake_run)
+    monkeypatch.setattr(crates_mod.time, "sleep", lambda seconds: None)
+
+    _exit_code, output = crates_mod.publish_crate("crawlberg-cli", [])
+
+    assert calls == 2
+    assert crates_mod.is_already_published(output) is True
+
+
+def test_publish_crate_does_not_retry_a_verdict_from_the_registry(monkeypatch):
+    """A refusal is an answer. Only failures to reach crates.io may be retried."""
+    calls = 0
+
+    def fake_run(cmd: list[str]):
+        nonlocal calls
+        calls += 1
+        return 1, "error: failed to publish: the remote server responded with 403 Forbidden"
+
+    slept: list[float] = []
+    monkeypatch.setattr(crates_mod, "_run", fake_run)
+    monkeypatch.setattr(crates_mod.time, "sleep", slept.append)
+
+    exit_code, output = crates_mod.publish_crate("crawlberg-cli", [])
+
+    assert exit_code == 1
+    assert crates_mod.is_transient_transport_error(output) is False
+    assert calls == 1, "a 403 must fail fast, not burn ten minutes of retries"
+    assert slept == []
+
+
 def test_normalize_release_version_strips_tag_prefix():
     assert crates_mod.normalize_release_version("v1.16.0") == "1.16.0"
     assert crates_mod.normalize_release_version("  1.16.0 ") == "1.16.0"

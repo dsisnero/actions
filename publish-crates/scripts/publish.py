@@ -51,6 +51,27 @@ NEW_CRATE_TRUSTED_PUBLISHING_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# ~keep The upload itself can drop, not just the index lookup before it. crawlberg v1.6.3
+# ~keep lost `[35] SSL connect error (Recv failure: Connection reset by peer)` on the fifth
+# ~keep of five crates; four were live, the release gate derived from this job went red, and
+# ~keep Ruby, PyPI, Hex, Packagist and Elixir all skipped off one dropped connection.
+# ~keep Re-dispatching the identical workflow published it first try, so it was purely
+# ~keep transient -- exactly what the retry loop already exists to absorb for index lag.
+# ~keep Deliberately narrow: only curl/transport failures with no server verdict. A 4xx from
+# ~keep crates.io is an answer and must not be retried.
+TRANSIENT_TRANSPORT_PATTERN = re.compile(
+    r"SSL connect error"
+    r"|Recv failure"
+    r"|Send failure"
+    r"|Connection reset by peer"
+    r"|Connection timed out"
+    r"|Operation timed out"
+    r"|Could not resolve host"
+    r"|Failed to connect to"
+    r"|transfer closed with",
+    re.IGNORECASE,
+)
+
 INDEX_POLL_TIMEOUT_SECONDS = 600
 INDEX_POLL_INTERVAL_SECONDS = 5
 
@@ -66,6 +87,16 @@ def is_already_published(output: str) -> bool:
 def is_dependency_not_ready(output: str) -> bool:
     """Return True if cargo publish failed because an upstream crate has not propagated."""
     return bool(DEPENDENCY_NOT_READY_PATTERN.search(output))
+
+
+def is_transient_transport_error(output: str) -> bool:
+    """Return True if cargo publish failed to reach crates.io rather than being refused by it.
+
+    A dropped connection carries no verdict: the upload may not have started, so retrying is
+    safe. If it did land, the retry sees "already uploaded" and `is_already_published` treats
+    that as success.
+    """
+    return bool(TRANSIENT_TRANSPORT_PATTERN.search(output))
 
 
 def is_new_crate_trusted_publishing(output: str) -> bool:
@@ -601,11 +632,20 @@ def publish_crate(crate: str, manifest_args: list[str]) -> tuple[int, str]:
         exit_code, output = _run(["cargo", "publish", "-p", crate, *manifest_args, "--allow-dirty"])
         if is_new_crate_trusted_publishing(output):
             return exit_code, output
-        if exit_code == 0 or is_already_published(output) or not is_dependency_not_ready(output):
+        if exit_code == 0 or is_already_published(output):
+            return exit_code, output
+        dependency_not_ready = is_dependency_not_ready(output)
+        transport_failed = is_transient_transport_error(output)
+        if not dependency_not_ready and not transport_failed:
             return exit_code, output
         if attempt < PUBLISH_RETRY_ATTEMPTS:
+            reason = (
+                "an upstream dependency is not yet resolvable on the index"
+                if dependency_not_ready
+                else "the connection to crates.io failed before it answered"
+            )
             print(
-                f"  {crate}: an upstream dependency is not yet resolvable on the index "
+                f"  {crate}: {reason} "
                 f"(attempt {attempt}/{PUBLISH_RETRY_ATTEMPTS}); retrying in "
                 f"{PUBLISH_RETRY_DELAY_SECONDS}s",
                 file=sys.stderr,
