@@ -15,7 +15,17 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: run-bats on ${{ matrix.os }}
+    # ~keep macOS as well as ubuntu. /bin/bash there is 3.2, which is what
+    # ~keep `#!/usr/bin/env bash` resolves to on a macOS runner, and expanding an empty array
+    # ~keep under `set -u` is a fatal error on 3.2 but not on 4.4+. This job being
+    # ~keep ubuntu-only is why run-bats shipped unable to run with its own default inputs
+    # ~keep on any macOS consumer.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -35,6 +45,30 @@ jobs:
           echo "$shim_dir" >>"$GITHUB_PATH"
 
       - name: Run a workspace-contained test path
+        uses: ./run-bats
+        with:
+          path: .run-bats-fixture/tests
+          args: |-
+            --filter
+            matching test
+
+      # ~keep Exercises the action's OWN DEFAULT: action.yaml defaults `args` to "", and the
+      # ~keep other steps here all pass args explicitly, so the empty-array expansion that
+      # ~keep breaks on bash 3.2 was never reached by this workflow. Runs before the assertion
+      # ~keep below because it overwrites the same invocation file.
+      - name: Run with the default (empty) args
+        uses: ./run-bats
+        with:
+          path: .run-bats-fixture/tests
+
+      - name: Verify the default-args invocation reached bats
+        shell: bash
+        run: |
+          invocation=.run-bats-fixture/invocation.txt
+          test "$(sed -n '1p' "$invocation")" = "${GITHUB_WORKSPACE}/.run-bats-fixture/tests"
+          test -z "$(sed -n '2p' "$invocation")"
+
+      - name: Run a workspace-contained test path again for the splitting assertion
         uses: ./run-bats
         with:
           path: .run-bats-fixture/tests

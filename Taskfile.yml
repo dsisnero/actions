@@ -31,6 +31,7 @@ tasks:
     cmds:
       - task: test:unit
       - task: test:bats
+      - task: test:pester
 
   test:unit:
     desc: Run pytest unit tests
@@ -40,7 +41,23 @@ tasks:
   test:bats:
     desc: Run Bats tests for Bash action scripts
     cmds:
-      - bats --recursive .
+      - bats --recursive --print-output-on-failure .
+
+  test:pester:
+    desc: Run Pester tests for PowerShell action scripts
+    cmds:
+      # Single-quoted so the shell cannot expand `$c`/`$true` before pwsh sees them.
+      # Run.Throw fails the run when discovery finds no tests, so a broken glob cannot pass
+      # as a green suite. Windows-only assertions are `-Skip`ped off Windows.
+      - >-
+        pwsh -NoProfile -Command
+        'Import-Module Pester -MinimumVersion 5.5.0 -Force;
+        $c = New-PesterConfiguration;
+        $c.Run.Path = ".";
+        $c.Run.Exit = $true;
+        $c.Run.Throw = $true;
+        $c.Output.Verbosity = "Detailed";
+        Invoke-Pester -Configuration $c'
 
   test:act:
     desc: Run a specific test workflow locally (usage{{":"}} task test:act -- test-setup-rust.yml)

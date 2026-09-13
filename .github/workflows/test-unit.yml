@@ -26,7 +26,17 @@ permissions:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    name: pytest on ${{ matrix.os }}
+    # ~keep Both runners, not just ubuntu. These suites cover scripts that build on macOS and
+    # ~keep Linux runners alike, and a single-platform suite is how `setup-zig` (bash 3.2 on
+    # ~keep macOS) and `build-swift-package` (GNU vs BSD stat on Linux) each stayed broken for
+    # ~keep every consumer of one platform while CI stayed green. The Bats job already runs
+    # ~keep both; this closes the same gap for Python.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v7
 
