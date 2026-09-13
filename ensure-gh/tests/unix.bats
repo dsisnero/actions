@@ -3,8 +3,29 @@
 setup() {
 	TEST_ROOT="$(mktemp -d)"
 	STUB_BIN="$TEST_ROOT/bin"
-	mkdir -p "$STUB_BIN"
-	export TEST_ROOT STUB_BIN
+	SYS_BIN="$TEST_ROOT/sysbin"
+	mkdir -p "$STUB_BIN" "$SYS_BIN"
+	# ~keep `bash` is on the list because the stubs this suite writes start with
+	# `#!/usr/bin/env bash`, and `env` resolves that interpreter through PATH.
+	expose_system_commands bash chmod grep head mkdir mktemp mv rm sed tar
+	export TEST_ROOT STUB_BIN SYS_BIN
+}
+
+# Link the named system utilities into a private directory so a test can run the script
+# against a PATH that holds nothing else.
+#
+# The previous `PATH="$STUB_BIN:/usr/bin:/bin"` was not isolation. `unix.sh` decides whether
+# to download by probing `command -v gh`, and a runner that ships gh in /usr/bin --
+# ubuntu-latest does, macOS does not -- satisfies that probe and takes the already-installed
+# branch instead of the one under test. The suite passed locally and failed in CI for exactly
+# that reason. Listing the utilities the script needs keeps the probe honest; a missing one
+# fails loudly here rather than silently resolving to whatever the host provides. ~keep
+expose_system_commands() {
+	local name source
+	for name in "$@"; do
+		source="$(command -v "$name")" || continue
+		ln -sf "$source" "$SYS_BIN/$name"
+	done
 }
 
 teardown() {
@@ -22,7 +43,7 @@ make_stub() {
 	make_stub gh '#!/usr/bin/env bash' 'printf "%s\n" "gh version 2.50.0"'
 	make_stub curl '#!/usr/bin/env bash' 'exit 99'
 
-	run env PATH="$STUB_BIN:/usr/bin:/bin" HOME="$TEST_ROOT/home" \
+	run env PATH="$STUB_BIN:$SYS_BIN" HOME="$TEST_ROOT/home" \
 		/bin/bash "$BATS_TEST_DIRNAME/../scripts/unix.sh" latest
 
 	[ "$status" -eq 0 ]
@@ -47,7 +68,7 @@ make_stub() {
 	local github_path="$TEST_ROOT/github-path"
 	: >"$github_path"
 
-	run env PATH="$STUB_BIN:/usr/bin:/bin" HOME="$home_dir" GH_ARCHIVE="$TEST_ROOT/gh.tar.gz" GITHUB_PATH="$github_path" \
+	run env PATH="$STUB_BIN:$SYS_BIN" HOME="$home_dir" GH_ARCHIVE="$TEST_ROOT/gh.tar.gz" GITHUB_PATH="$github_path" \
 		/bin/bash "$BATS_TEST_DIRNAME/../scripts/unix.sh" v2.50.0
 
 	[ "$status" -eq 0 ]
@@ -60,7 +81,7 @@ make_stub() {
 	make_stub uname '#!/usr/bin/env bash' 'printf "%s\n" FreeBSD'
 	make_stub curl '#!/usr/bin/env bash' 'exit 99'
 
-	run env PATH="$STUB_BIN:/usr/bin:/bin" HOME="$TEST_ROOT/home" \
+	run env PATH="$STUB_BIN:$SYS_BIN" HOME="$TEST_ROOT/home" \
 		/bin/bash "$BATS_TEST_DIRNAME/../scripts/unix.sh" 2.50.0
 
 	[ "$status" -eq 1 ]

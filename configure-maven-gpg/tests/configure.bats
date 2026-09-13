@@ -5,7 +5,12 @@ stub() { printf '%s\n' '#!/usr/bin/env bash' "$2" >"$BIN/$1"; chmod +x "$BIN/$1"
 
 @test "should_report_default_gpg_when_gpg2_is_not_available" {
   export INPUT_PREFER_GPG2=true INPUT_PATCH_POM=false
-  run bash "$SCRIPT"
+  # ~keep PATH is narrowed to the stub directory alone. The setup PATH keeps /usr/bin, and a
+  # runner that ships gpg2 there -- ubuntu-latest does, macOS does not -- satisfies the script's
+  # `command -v gpg2` probe and takes the wrapper branch instead of the one under test, which is
+  # why this passed locally and failed in CI. With patch-pom off the script reaches only `echo`,
+  # a builtin, so it needs nothing else on PATH.
+  run env PATH="$BIN" /bin/bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$output" = "gpg2 not found; using default gpg" ]
   [ ! -e "$ROOT/path" ]

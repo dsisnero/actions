@@ -115,6 +115,12 @@ make_stub() {
 }
 
 @test "install-macos should_fail_after_retrying_required_cmake_installation" {
+	# ~keep install-macos.sh probes absolute macOS paths -- /opt/homebrew/bin and
+	# /usr/local/bin -- to decide what it appends to GITHUB_PATH, and those cannot be stubbed
+	# out of an absolute lookup. On a Linux runner neither exists, GITHUB_PATH stays empty and
+	# the assertion below fails; the script simply has nothing to assert there. Skipping is
+	# honest, running it on Linux was not.
+	[ "$(uname -s)" = "Darwin" ] || skip "install-macos.sh only has observable behaviour on macOS"
 	make_stub brew '#!/usr/bin/env bash' \
 		'if [ "$1" = "list" ]; then exit 1; fi' \
 		'if [ "$1" = "install" ] && [ "$2" = "cmake" ]; then exit 1; fi' \
@@ -143,6 +149,12 @@ make_stub() {
 }
 
 @test "install-macos should_verify_available_dependencies_and_export_cmake_location" {
+	# ~keep install-macos.sh probes absolute macOS paths -- /opt/homebrew/bin and
+	# /usr/local/bin -- to decide what it appends to GITHUB_PATH, and those cannot be stubbed
+	# out of an absolute lookup. On a Linux runner neither exists, GITHUB_PATH stays empty and
+	# the assertion below fails; the script simply has nothing to assert there. Skipping is
+	# honest, running it on Linux was not.
+	[ "$(uname -s)" = "Darwin" ] || skip "install-macos.sh only has observable behaviour on macOS"
 	local github_path="$TEST_ROOT/github-path"
 	local github_env="$TEST_ROOT/github-env"
 	local bash_env="$TEST_ROOT/bash-env"
