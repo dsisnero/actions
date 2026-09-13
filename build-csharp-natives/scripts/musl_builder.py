@@ -44,7 +44,7 @@ def build_in_docker(
     if not is_musl_target(target):
         raise ValueError(f"Docker build is only for musl targets, got {target}")
 
-    get_alpine_arch(target)
+    alpine_arch = get_alpine_arch(target)
     image = "rust:1-alpine3.21"
 
     cwd = Path.cwd().resolve()
@@ -72,6 +72,13 @@ def build_in_docker(
         "docker",
         "run",
         "--rm",
+        # Without --platform, docker pulls the host-arch image while the linker below is set for
+        # `target`, so an aarch64 build on an x86_64 runner links against host gcc. get_alpine_arch
+        # both supplies this value and rejects targets Alpine has no image for -- it is a guard, not
+        # a dead call. Docker normalises the Alpine arch spellings (aarch64 -> arm64, x86_64 ->
+        # amd64), so they can be passed through verbatim. ~keep
+        "--platform",
+        f"linux/{alpine_arch}",
         "-v",
         f"{cwd}:/src",
         "-w",

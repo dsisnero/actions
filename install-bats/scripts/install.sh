@@ -43,7 +43,7 @@ fetch_release_metadata() {
 		--max-time 30 \
 		--header "Accept: application/vnd.github+json" \
 		--header "X-GitHub-Api-Version: 2022-11-28" \
-		"${auth_args[@]}" \
+		${auth_args[@]+"${auth_args[@]}"} \
 		--output "$metadata_file" \
 		"$release_url"; then
 		error "Could not retrieve Bats release metadata from GitHub."
@@ -99,13 +99,85 @@ validate_tag() {
 	[[ "$tag" =~ ^v[0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]
 }
 
+# Collapses "." and ".." components without touching the filesystem, so an archive entry can be
+# resolved before anything is extracted. Fails when the path climbs above its own first
+# component, which is what a traversal link does. ~keep
+normalize_archive_path() {
+	local remaining="$1"
+	local normalized=""
+	local component
+
+	while [[ -n "$remaining" ]]; do
+		component="${remaining%%/*}"
+		if [[ "$remaining" == */* ]]; then
+			remaining="${remaining#*/}"
+		else
+			remaining=""
+		fi
+
+		case "$component" in
+		"" | .) ;;
+		..)
+			[[ -n "$normalized" ]] || return 1
+			if [[ "$normalized" == */* ]]; then
+				normalized="${normalized%/*}"
+			else
+				normalized=""
+			fi
+			;;
+		*) normalized="${normalized:+${normalized}/}${component}" ;;
+		esac
+	done
+
+	printf '%s\n' "$normalized"
+}
+
+# Splits the target off a `tar -tv` line by anchoring on the entry name, which the caller already
+# read from `tar -t` and validated -- parsing the columns instead would have to straddle the
+# different layouts GNU tar and bsdtar print. ~keep
+read_link_target() {
+	local verbose_entry="$1"
+	local entry_name="$2"
+	local entry_type="$3"
+	local separator="${entry_name} -> "
+
+	[[ "$entry_type" == "l" ]] || separator="${entry_name} link to "
+	[[ "$verbose_entry" == *"$separator"* ]] || return 1
+
+	printf '%s\n' "${verbose_entry#*"$separator"}"
+}
+
+# Symlink targets are relative to the entry's own directory; tar reports hard-link targets as
+# archive-root-relative paths. ~keep
+link_target_stays_in_root() {
+	local entry_name="$1"
+	local entry_type="$2"
+	local link_target="$3"
+	local expected_root="$4"
+	local base=""
+	local resolved
+
+	[[ "$link_target" != /* ]] || return 1
+	if [[ "$entry_type" == "l" && "$entry_name" == */* ]]; then
+		base="${entry_name%/*}/"
+	fi
+
+	resolved="$(normalize_archive_path "${base}${link_target}")" || return 1
+	[[ "$resolved" == "$expected_root" || "$resolved" == "$expected_root/"* ]]
+}
+
+# The threat is extraction-time path traversal, not the presence of a link: upstream bats-core
+# tarballs legitimately ship ten in-tree symlinks under test/fixtures/, so rejecting links
+# outright would reject every real release. Entry names come from `tar -t` and entry types and
+# link targets from `tar -tv`, read in lockstep -- both list the same entries in the same
+# order. ~keep
 validate_archive() {
 	local archive="$1"
 	local expected_root="$2"
-	local archive_entry
+	local archive_entry verbose_entry entry_type link_target
 	local found_bats=false
 
-	while IFS= read -r archive_entry; do
+	while IFS= read -r archive_entry && IFS= read -r verbose_entry <&3; do
 		archive_entry="${archive_entry#./}"
 		[[ -n "$archive_entry" ]] || continue
 
@@ -119,15 +191,24 @@ validate_archive() {
 			error "Downloaded Bats archive has an unexpected top-level path."
 		fi
 
+		entry_type="${verbose_entry:0:1}"
+		case "$entry_type" in
+		- | d) ;;
+		l | h)
+			link_target="$(read_link_target "$verbose_entry" "$archive_entry" "$entry_type")" ||
+				error "Could not read the link target of '${archive_entry}' in the downloaded Bats archive."
+			link_target_stays_in_root "$archive_entry" "$entry_type" "$link_target" "$expected_root" ||
+				error "Downloaded Bats archive links outside itself: '${archive_entry}' -> '${link_target}'."
+			;;
+		*)
+			error "Downloaded Bats archive contains an unsupported special-file entry: '${archive_entry}'."
+			;;
+		esac
+
 		if [[ "$archive_entry" == "${expected_root}/bin/bats" ]]; then
 			found_bats=true
 		fi
-	done < <(tar -tzf "$archive")
-
-	if ! tar -tvzf "$archive" |
-		awk 'substr($0, 1, 1) !~ /[-d]/ { invalid = 1 } END { exit !invalid }'; then
-		error "Downloaded Bats archive contains unsupported link or special-file entries."
-	fi
+	done < <(tar -tzf "$archive") 3< <(tar -tvzf "$archive")
 
 	if [[ "$found_bats" != true ]]; then
 		error "Downloaded Bats archive does not contain bin/bats."

@@ -76,4 +76,6 @@ if [[ -n "${INPUT_ARGS:-}" ]]; then
 	done <<<"$INPUT_ARGS"
 fi
 
-bats "${bats_args[@]}" "$test_path"
+# `args` defaults to "", so bats_args is routinely empty, and bash before 4.4 -- /bin/bash on a
+# macOS runner -- treats "${empty[@]}" as unbound under `set -u`. ~keep
+bats ${bats_args[@]+"${bats_args[@]}"} "$test_path"

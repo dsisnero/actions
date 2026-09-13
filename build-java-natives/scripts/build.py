@@ -24,6 +24,11 @@ from pathlib import Path
 
 from musl_builder import build_or_fallback
 
+# A dry run still stages at the real path so the action's outputs stay usable, so the payload has
+# to be what distinguishes it. It is non-empty and self-describing rather than zero bytes, and
+# carries no ELF/Mach-O/PE magic, which is what stage-java-natives rejects it on. ~keep
+DRY_RUN_PLACEHOLDER = b"build-java-natives dry-run placeholder -- not a shared library\n"
+
 
 def library_filename(lib_name: str, target: str) -> str:
     if "windows" in target:
@@ -82,7 +87,7 @@ def main() -> None:
         if glibc_version:
             print(f"  glibc-version: {glibc_version}")
         staging_dir.mkdir(parents=True, exist_ok=True)
-        staged_lib.write_bytes(b"")
+        staged_lib.write_bytes(DRY_RUN_PLACEHOLDER)
         write_github_output("library-path", str(staged_lib.resolve()))
         write_github_output("staging-dir", str(staging_dir.resolve()))
         return

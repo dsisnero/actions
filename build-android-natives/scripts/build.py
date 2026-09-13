@@ -20,6 +20,7 @@ Inputs (env vars):
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -96,7 +97,7 @@ def main() -> None:
     no_default_features = os.environ.get("INPUT_NO_DEFAULT_FEATURES", "false").lower() == "true"
     dry_run = os.environ.get("INPUT_DRY_RUN", "false").lower() == "true"
 
-    abis = [a.strip() for a in abis_str.split(",") if a.strip()]
+    abis = list(dict.fromkeys(a.strip() for a in abis_str.split(",") if a.strip()))
     if not abis:
         print("Error: no ABIs specified", file=sys.stderr)
         sys.exit(1)
@@ -121,16 +122,14 @@ def main() -> None:
         write_github_output("output-dir", str(output_dir.resolve() if output_dir.exists() else output_dir))
         return
 
-    unique_targets = list(dict.fromkeys(rust_targets))
-    for target in unique_targets:
+    for target in rust_targets:
         run_command(["rustup", "target", "add", target])
 
-    try:
-        subprocess.run(["which", "cargo-ndk"], check=True, capture_output=True)
-        print("[build-android-natives] cargo-ndk already installed")
-    except subprocess.CalledProcessError:
+    if shutil.which("cargo-ndk") is None:
         print("[build-android-natives] Installing cargo-ndk...")
         run_command(["cargo", "install", "cargo-ndk", "--locked"])
+    else:
+        print("[build-android-natives] cargo-ndk already installed")
 
     for abi, _target in zip(abis, rust_targets, strict=True):
         cmd = [

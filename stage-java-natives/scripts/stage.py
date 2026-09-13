@@ -10,13 +10,16 @@ upload they came from.
 
 This script walks the artifacts tree, copies each lib into
 `{resources-dir}/{classifier}/`, then verifies every classifier in
-`required-classifiers` has exactly one matching library file.
+`required-classifiers` has exactly one matching library file — matching meaning
+its name is one of the platform filenames `lib-name` can take and its payload
+starts with a shared-library magic number, so a placeholder cannot pass as a lib.
 
 Inputs (env vars):
     INPUT_ARTIFACTS_DIR: source tree containing native/{classifier}/{libfile}
     INPUT_RESOURCES_DIR: destination Maven resources dir
     INPUT_REQUIRED_CLASSIFIERS: whitespace-separated classifier list
-    INPUT_LIB_NAME: library base name (used to confirm each classifier has it)
+    INPUT_LIB_NAME: library base name; each required classifier must hold exactly
+        one of lib{lib-name}.so / lib{lib-name}.dylib / {lib-name}.dll
 """
 
 from __future__ import annotations
@@ -27,6 +30,22 @@ import sys
 from pathlib import Path
 
 LIB_EXTENSIONS = (".so", ".dylib", ".dll")
+
+# Leading bytes of every shared library this action can legitimately stage: ELF (.so), Mach-O in
+# its four byte orders plus the universal-binary header (.dylib), and the DOS stub of a PE image
+# (.dll). A dry-run placeholder, a truncated upload or a zero-byte file matches none of them, and
+# nothing further downstream inspects the payload before it lands in a published JAR. ~keep
+LIB_MAGIC_NUMBERS = (
+    b"\x7fELF",
+    b"\xfe\xed\xfa\xce",
+    b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf",
+    b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+    b"\xbe\xba\xfe\xca",
+    b"MZ",
+)
+MAGIC_PREFIX_BYTES = max(len(magic) for magic in LIB_MAGIC_NUMBERS)
 
 
 def require_env(name: str) -> str:
@@ -60,25 +79,50 @@ def stage_libs(libs: list[Path], resources_dir: Path) -> dict[str, list[Path]]:
     return staged
 
 
+def expected_lib_filenames(lib_name: str) -> tuple[str, ...]:
+    """The exact filenames build-java-natives emits for `lib_name`, one per platform."""
+    return (f"lib{lib_name}.so", f"lib{lib_name}.dylib", f"{lib_name}.dll")
+
+
+def is_native_library(path: Path) -> bool:
+    """True when `path` begins with a shared-library magic number."""
+    try:
+        with path.open("rb") as handle:
+            return handle.read(MAGIC_PREFIX_BYTES).startswith(LIB_MAGIC_NUMBERS)
+    except OSError:
+        return False
+
+
 def verify_required(
     staged: dict[str, list[Path]],
     resources_dir: Path,
     required: list[str],
     lib_name: str,
 ) -> None:
-    missing: list[str] = []
+    expected = expected_lib_filenames(lib_name)
+    failures: list[str] = []
     for classifier in required:
-        candidates = [staged_lib for staged_lib in staged.get(classifier, []) if lib_name in staged_lib.name]
+        candidates = [staged_lib for staged_lib in staged.get(classifier, []) if staged_lib.name in expected]
         if not candidates:
-            missing.append(classifier)
-    if missing:
-        for classifier in missing:
-            print(
-                f"::error::stage-java-natives: missing lib for classifier "
-                f"'{classifier}' (expected file containing '{lib_name}' under "
-                f"{resources_dir}/{classifier}/)",
-                file=sys.stderr,
+            failures.append(
+                f"missing lib for classifier '{classifier}' (expected one of "
+                f"{', '.join(expected)} under {resources_dir}/{classifier}/)"
             )
+        elif len(candidates) > 1:
+            names = ", ".join(sorted(staged_lib.name for staged_lib in candidates))
+            failures.append(
+                f"ambiguous lib for classifier '{classifier}': exactly one of "
+                f"{', '.join(expected)} must be staged under {resources_dir}/{classifier}/, found {names}"
+            )
+        elif not is_native_library(candidates[0]):
+            size = candidates[0].stat().st_size if candidates[0].is_file() else 0
+            failures.append(
+                f"lib for classifier '{classifier}' is not a shared library: {candidates[0]} "
+                f"({size} bytes) carries no ELF/Mach-O/PE magic -- a dry-run placeholder?"
+            )
+    if failures:
+        for failure in failures:
+            print(f"::error::stage-java-natives: {failure}", file=sys.stderr)
         sys.exit(1)
 
 
