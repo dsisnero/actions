@@ -4,6 +4,59 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-13
+
+### Added
+
+- Pester test suites for all nine PowerShell action scripts (116 tests), a `test:pester` task,
+  and a `Pester tests` workflow. Discrimination was proven by mutating each script and confirming
+  the suite goes red, which caught two flaws in the tests themselves: `Should -Be` is
+  case-insensitive, so a test of drive-letter lowercasing passed against a script with the
+  lowercasing removed; and a stub binary was never made executable because `chmod` receives paths
+  verbatim while PowerShell normalises separators.
+- pytest suites for `build-android-natives`, `build-csharp-natives` (and its `musl_builder`),
+  `build-go-ffi`, `build-java-natives`, `run-test-apps` and `stage-java-natives`, and Bats suites
+  for `install-bats` and `run-bats`.
+- A `test-coverage-by-language` rule and `testing-conventions` skill recording which framework
+  each script language uses and that a green run is not evidence until the suite has been shown
+  to fail against a broken script.
+
+### Changed
+
+- The pytest job now runs on macOS as well as Linux, and the Pester job on macOS as well as
+  Windows. Single-platform suites are how `setup-zig` (bash 3.2) and `build-swift-package`
+  (GNU vs BSD `stat`) each stayed broken for every consumer of one platform while CI stayed
+  green; four Pester tests are `-Skip:($IsWindows)` and would otherwise have run on no runner at
+  all while still reporting green.
+- `test-run-bats` now also invokes `run-bats` with its default empty `args`. Every other step
+  passed args explicitly, so the unbound-array failure below could not reach CI from any existing
+  call site.
+
+### Fixed
+
+- `install-bats` rejected every valid Bats release and accepted malicious ones. The archive guard
+  ran `awk ... END { exit !invalid }`, which exits 0 only when a link **is** present — the exact
+  inverse of the intent. Real `bats-core` tarballs ship ten in-tree symlinks under
+  `test/fixtures/`, so the guard failed closed on every genuine release while passing any archive
+  containing a traversal link. Entries are now typed individually and each link target is
+  resolved against the archive root, so in-tree links and hard links are accepted while
+  `../`-escaping and absolute targets are refused.
+- `run-bats` and `install-bats` failed under `set -u` on bash before 4.4 — `/bin/bash` on every
+  macOS runner — because `"${arr[@]}"` on an empty array is treated as unbound. `run-bats` hit
+  this with its default empty `args`.
+- `stage-java-natives` matched `lib-name` as a substring and never inspected the file, so a
+  dry-run placeholder satisfied the gate. It now requires the exact per-platform filename,
+  exactly one match per classifier, and an ELF/Mach-O/PE magic number — nothing else checks the
+  payload before it lands in a published JAR.
+- `build-java-natives` dry runs wrote a zero-byte library that the above gate accepted.
+- `build-csharp-natives` and `build-java-natives` discarded the `get_alpine_arch` result, so
+  `docker` pulled the host-architecture image while the linker was configured for the target.
+  The value is now passed as `--platform linux/<arch>`.
+- `build-android-natives` crashed with `FileNotFoundError` instead of reporting a missing tool
+  when `which` was absent, and built twice for a duplicated ABI.
+- `run-test-apps` let a malformed `alef.toml` escape as a traceback, and reported "no matching
+  entry" for a `language = "1.0.0"` shorthand rather than naming the entry it could not rewrite.
+
 ## [1.17.0] - 2026-09-13
 
 ### Security
