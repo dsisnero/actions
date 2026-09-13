@@ -1,30 +1,52 @@
 #!/usr/bin/env bats
 
+# ~keep Built once per file: the mirror is read-only and identical for every test here, and
+# rebuilding a few thousand symlinks per test is pure wall-clock.
+setup_file() {
+	SYS_BIN="$(mktemp -d)/sysbin"
+	mkdir -p "$SYS_BIN"
+	export SYS_BIN
+	shadow_system_path_without gh
+	# ~keep The whole point of the mirror is that this command is missing from it, and a
+	# silent leak would put every test in this file back on the host's copy without
+	# failing. Assert the precondition instead of assuming it.
+	[ ! -e "$SYS_BIN/gh" ] || { echo "mirror leaked gh" >&2; return 1; }
+}
+
+teardown_file() {
+	rm -rf "$(dirname "$SYS_BIN")"
+}
+
 setup() {
 	TEST_ROOT="$(mktemp -d)"
 	STUB_BIN="$TEST_ROOT/bin"
-	SYS_BIN="$TEST_ROOT/sysbin"
-	mkdir -p "$STUB_BIN" "$SYS_BIN"
-	# ~keep `bash` is on the list because the stubs this suite writes start with
-	# `#!/usr/bin/env bash`, and `env` resolves that interpreter through PATH.
-	expose_system_commands bash chmod grep head mkdir mktemp mv rm sed tar
-	export TEST_ROOT STUB_BIN SYS_BIN
+	mkdir -p "$STUB_BIN"
+	export TEST_ROOT STUB_BIN
 }
 
-# Link the named system utilities into a private directory so a test can run the script
-# against a PATH that holds nothing else.
+# Mirror the host's standard command directories into a private bin, minus the commands whose
+# absence is the point of the test. PATH is then exactly the stub dir plus this mirror.
 #
-# The previous `PATH="$STUB_BIN:/usr/bin:/bin"` was not isolation. `unix.sh` decides whether
-# to download by probing `command -v gh`, and a runner that ships gh in /usr/bin --
-# ubuntu-latest does, macOS does not -- satisfies that probe and takes the already-installed
-# branch instead of the one under test. The suite passed locally and failed in CI for exactly
-# that reason. Listing the utilities the script needs keeps the probe honest; a missing one
-# fails loudly here rather than silently resolving to whatever the host provides. ~keep
-expose_system_commands() {
-	local name source
-	for name in "$@"; do
-		source="$(command -v "$name")" || continue
-		ln -sf "$source" "$SYS_BIN/$name"
+# An allow-list was tried first and was the wrong shape. What these tests need is not "the
+# script may use exactly these ten utilities" -- that guesses at an implementation detail and
+# breaks the moment the script reaches for one more, which is how `tar -xzf` shelling out to
+# gzip on GNU tar slipped through. What they need is "the host does not supply gh", with an
+# otherwise realistic system underneath. Naming the excluded command states that directly.
+#
+# The original `PATH="$STUB_BIN:/usr/bin:/bin"` stated nothing: `unix.sh` decides whether to
+# download by probing `command -v gh`, ubuntu-latest ships gh in /usr/bin and macOS does not,
+# so the probe succeeded on CI and the script took the already-installed branch instead of the
+# one under test -- green locally, red in CI. ~keep
+shadow_system_path_without() {
+	local excluded=" $* " directory source name
+	for directory in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
+		[ -d "$directory" ] || continue
+		for source in "$directory"/*; do
+			[ -x "$source" ] || continue
+			name="${source##*/}"
+			case "$excluded" in *" $name "*) continue ;; esac
+			[ -e "$SYS_BIN/$name" ] || ln -s "$source" "$SYS_BIN/$name"
+		done
 	done
 }
 
