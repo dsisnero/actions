@@ -4,6 +4,49 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-09-13
+
+### Added
+
+- **`reusable-cli-release.yml` takes an `undraft-release` input.** Its "Ensure release is
+  published (un-draft)" step ran unconditionally, which took the promotion decision away from a
+  repo that gates it itself. crawlberg holds its release as a draft until every registry has
+  published and its asset inventory is verified; on v1.6.3 the crates.io job failed,
+  `promote-release` was correctly skipped, and this step published the release anyway -- so it
+  went public with one of five crates missing from crates.io. Defaults `true`, so a consumer with
+  no promotion gate of its own is unaffected.
+
+### Fixed
+
+- **`publish-crates` retries a publish that never reached crates.io.** crawlberg v1.6.3 lost its
+  fifth crate to `[35] SSL connect error (Recv failure: Connection reset by peer)` during upload.
+  Four crates were already live, the release gate derived from this job went red, and Ruby, PyPI,
+  Hex, Packagist and Elixir all skipped off one dropped connection; re-dispatching the identical
+  workflow published it first try. The retry loop already absorbed index-propagation lag but
+  returned immediately on a transport failure. The retry stays narrow -- a refusal from the
+  registry is an answer and still fails fast -- and an upload that landed before the drop is
+  recognised as already published on the retry.
+- **`setup-zig` worked on no macOS runner.** `unix.sh` used `mapfile`, a bash 4 builtin, and macOS
+  ships bash 3.2 as `/bin/bash`, which is what `#!/usr/bin/env bash` resolves to there. It died
+  with `mapfile: command not found` and then read the resolved URL and version out of an empty
+  array.
+- **`build-swift-package` worked on no Linux runner.** It tried BSD `stat -f '%m'` before GNU
+  `stat -c '%Y'`. The BSD form does not fail on Linux: GNU `stat` reads `-f` as `--file-system`,
+  treats `'%m'` as a filename, and prints filesystem details beginning `File: ...`. That string
+  reached an arithmetic comparison and `set -u` aborted on the undefined name `File`. GNU-first
+  fails cleanly on BSD, so the order was simply backwards, and the result is digit-checked either
+  way now.
+- **`setup-rust` would have failed on macOS for a musl target.** `${cc_rs_var^^}` is a bash 4
+  expansion and a hard "bad substitution" under 3.2. Only a musl target reaches that branch, so it
+  had never fired; it is derived with `tr` now.
+- **Bats tests no longer assert what the runner happens to ship.** Tests restricted `PATH` to
+  `$STUB_BIN:/usr/bin:/bin`, which is not isolation -- the scripts under test branch on
+  `command -v <tool>`, and ubuntu-latest ships `gh`, `gpg2` and `dotnet` in `/usr/bin` where macOS
+  does not, so the probe succeeded and the branch under test never ran. Each such test now mirrors
+  the host's command directories minus the one command whose absence is the point, and asserts the
+  mirror really lacks it. `run-bats` also passes `--print-output-on-failure`, so a CI-only failure
+  is readable on its first occurrence.
+
 ## [1.15.0] - 2026-09-13
 
 ### Added
