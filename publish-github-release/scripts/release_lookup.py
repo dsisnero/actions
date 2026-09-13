@@ -15,6 +15,7 @@ only see published releases.
 from __future__ import annotations
 
 import json
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,6 +24,7 @@ from typing import Any
 RELEASES_PER_PAGE = 100
 # ~keep A repository with many releases would otherwise page forever; the target release is
 # ordered newest-first, so the tag being looked up is realistically on the first page or two.
+HTTP_NOT_FOUND = 404
 MAX_RELEASE_PAGES = 20
 
 
@@ -47,7 +49,17 @@ def _get_json(url: str, token: str) -> object | None:
         with urllib.request.urlopen(req) as response:  # noqa: S310
             payload: object = json.loads(response.read().decode("utf-8"))
             return payload
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError):
+    except urllib.error.HTTPError as e:
+        # ~keep A 404 is a real negative answer and stays quiet. Everything else -- 403, a
+        # ~keep rate-limit, a 5xx -- is NOT "no such release", and collapsing all of them into
+        # ~keep None is what let a transient failure surface to the caller as the confident
+        # ~keep message "not found (checked drafts and published)". Say which it was; the
+        # ~keep caller still decides what to do.
+        if e.code != HTTP_NOT_FOUND:
+            print(f"Warning: HTTP {e.code} {e.reason} from {url}", file=sys.stderr)
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
+        print(f"Warning: {type(e).__name__} from {url}: {e}", file=sys.stderr)
         return None
 
 

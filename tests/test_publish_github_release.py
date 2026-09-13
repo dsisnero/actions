@@ -241,3 +241,55 @@ def test_main_uploads_when_artifacts_match(tmp_path, monkeypatch):
     upload_mod.main()
 
     assert uploaded == ["pkg-1.0.0.whl"]
+
+
+# ~keep Regression coverage for the read-after-write race reported from tslp v1.19.1: the
+# create step made a draft at 13:36:19 and the upload step failed at 13:36:28 with
+# "not found (checked drafts and published)" -- 8.3s later, against a draft that was real and
+# sat at index 0 of page 1 of the listing. One fact derived twice across an eventual-consistency
+# window. These pin the pass-through that removes the second derivation.
+def test_upload_uses_the_release_id_from_the_create_step_without_consulting_the_listing(monkeypatch):
+    def _must_not_run(*_args, **_kwargs):
+        raise AssertionError(
+            "upload re-derived the release from the listing endpoint despite holding the id "
+            "the create step resolved -- this is the race that failed tslp v1.19.1"
+        )
+
+    monkeypatch.setattr(upload_mod, "find_release_by_tag", _must_not_run)
+    monkeypatch.setattr(
+        upload_mod, "get_release_by_id", lambda owner, repo, rid, token: {"id": rid, "tag_name": "v1.19.1"}
+    )
+    monkeypatch.setenv("INPUT_RELEASE_ID", "4242")
+
+    release = upload_mod.get_release_by_tag("owner", "repo", "v1.19.1", "token")
+
+    assert release == {"id": 4242, "tag_name": "v1.19.1"}
+
+
+def test_upload_falls_back_to_the_listing_when_no_release_id_was_passed(monkeypatch):
+    monkeypatch.delenv("INPUT_RELEASE_ID", raising=False)
+    monkeypatch.setattr(upload_mod, "find_release_by_tag", lambda owner, repo, tag, token: {"id": 7, "tag_name": tag})
+
+    release = upload_mod.get_release_by_tag("owner", "repo", "v1.19.1", "token")
+
+    assert release == {"id": 7, "tag_name": "v1.19.1"}
+
+
+def test_upload_falls_back_to_the_listing_when_the_passed_release_id_does_not_resolve(monkeypatch, capsys):
+    monkeypatch.setenv("INPUT_RELEASE_ID", "4242")
+    monkeypatch.setattr(upload_mod, "get_release_by_id", lambda owner, repo, rid, token: None)
+    monkeypatch.setattr(upload_mod, "find_release_by_tag", lambda owner, repo, tag, token: {"id": 9, "tag_name": tag})
+
+    release = upload_mod.get_release_by_tag("owner", "repo", "v1.19.1", "token")
+
+    assert release == {"id": 9, "tag_name": "v1.19.1"}
+    assert "did not resolve" in capsys.readouterr().err
+
+
+def test_ensure_release_publishes_the_resolved_release_id_for_the_upload_step(monkeypatch, tmp_path):
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+
+    ensure_mod.write_github_output("release-id", "4242")
+
+    assert output.read_text(encoding="utf-8") == "release-id=4242\n"

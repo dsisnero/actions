@@ -66,6 +66,7 @@ runs:
   using: composite
   steps:
     - name: Create or update GitHub release
+      id: ensure-release
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
@@ -87,5 +88,9 @@ runs:
         INPUT_TAG: ${{ inputs.tag }}
         INPUT_ARTIFACTS: ${{ inputs.artifacts }}
         INPUT_FAIL_IF_EMPTY: ${{ inputs.fail-if-empty }}
+        # ~keep The release the step above already resolved. Without this the upload
+        # ~keep re-derives the same release from the listing endpoint and loses a
+        # ~keep read-after-write race against the creation that just happened.
+        INPUT_RELEASE_ID: ${{ steps.ensure-release.outputs.release-id }}
       run: |
         python3 "${{ github.action_path }}/scripts/upload_artifacts.py"

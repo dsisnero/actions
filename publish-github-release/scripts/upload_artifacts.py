@@ -8,6 +8,7 @@ Usage (GitHub Actions via env vars):
     (default true).
 """
 
+import json
 import mimetypes
 import os
 import ssl
@@ -60,13 +61,42 @@ def expand_artifact_patterns(patterns: str) -> list[Path]:
     return files
 
 
+def get_release_by_id(owner: str, repo: str, release_id: int, token: str) -> dict[str, Any] | None:
+    """Fetch a release by its id. Returns None when the id does not resolve."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
+    req = urllib.request.Request(url, headers=get_github_api_headers(token), method="GET")  # noqa: S310
+    try:
+        with urllib.request.urlopen(req) as response:  # noqa: S310
+            payload: object = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def get_release_by_tag(owner: str, repo: str, tag: str, token: str) -> dict[str, Any]:
     """Get release info for a tag, drafts included. Exits when the release does not exist.
 
     Uses the draft-aware lookup: this action creates releases as drafts, and the plain
     `GET /releases/tags/{tag}` endpoint never resolves one, so uploading to a release this
     action had just created used to fail with a 404. See release_lookup for the details.
+
+    ~keep Prefer the id the create step already resolved, passed through INPUT_RELEASE_ID.
+    Re-deriving the release from the listing endpoint loses a read-after-write race against
+    the creation that precedes it -- tslp v1.19.1 created a draft and failed 8.3s later with
+    "not found (checked drafts and published)" against a draft sitting at index 0 of page 1.
+    The lookup remains the fallback for callers that upload to a release this action did not
+    just create, so nothing is lost when the id is absent.
     """
+    passed_id = os.environ.get("INPUT_RELEASE_ID", "").strip()
+    if passed_id.isdigit() and int(passed_id) > 0:
+        release = get_release_by_id(owner, repo, int(passed_id), token)
+        if release is not None:
+            return release
+        print(
+            f"Warning: release id {passed_id} from the create step did not resolve; falling back to lookup by tag",
+            file=sys.stderr,
+        )
+
     release = find_release_by_tag(owner, repo, tag, token)
     if release is None:
         print(f"Error: release {tag} not found in {owner}/{repo} (checked drafts and published)", file=sys.stderr)

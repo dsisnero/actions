@@ -4,6 +4,24 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.18.1] - 2026-09-13
+
+### Fixed
+
+- `publish-github-release` could fail on a release it had just created. `ensure_release.py`
+  created the release and discarded the id it received; `upload_artifacts.py` then re-derived
+  the same release from the releases *listing* endpoint, and that listing has a read-after-write
+  lag. Reported from a tree-sitter-language-pack v1.19.1 publish: the draft was created at
+  13:36:19 and the upload failed 8.3 seconds later with "release not found (checked drafts and
+  published)", against a draft that was real and sat at index 0 of page 1. The id is now passed
+  from the create step to the upload step, which removes the second derivation rather than
+  making it more patient — a retry would only narrow the window. The listing walk remains the
+  fallback for callers uploading to a release this action did not create.
+- `release_lookup._get_json` collapsed every failure — 403, rate-limit, 5xx, transport error —
+  into the same `None` a genuine 404 produces, so any of them surfaced to the caller as the
+  confident message "not found (checked drafts and published)". A 404 is still quiet; everything
+  else now says what it was.
+
 ## [1.18.0] - 2026-09-13
 
 ### Added

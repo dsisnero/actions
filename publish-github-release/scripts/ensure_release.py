@@ -168,6 +168,16 @@ def list_releases(owner: str, repo: str, token: str, per_page: int = 30) -> list
     return data if isinstance(data, list) else []
 
 
+def write_github_output(name: str, value: str) -> None:
+    sink = os.environ.get("GITHUB_OUTPUT", "")
+    line = f"{name}={value}\n"
+    if sink:
+        with Path(sink).open("a", encoding="utf-8") as handle:
+            handle.write(line)
+    else:
+        sys.stdout.write(line)
+
+
 def _repair_tag_name(
     owner: str, repo: str, release: dict[str, Any], tag: str, token: str, *, success_message: str = ""
 ) -> None:
@@ -276,8 +286,11 @@ def main() -> None:
 
     existing = get_release_by_tag(owner, repo, tag, token)
 
+    resolved: dict[str, Any] | None = None
+
     if existing:
         _reconcile_existing(owner, repo, existing, tag, token, draft=draft)
+        resolved = existing
     else:
         _wait_for_tag(owner, repo, tag, token)
 
@@ -287,6 +300,7 @@ def main() -> None:
             _repair_tag_name(
                 owner, repo, broken_draft, tag, token, success_message=f"Repaired broken draft, tag_name now {tag}"
             )
+            resolved = broken_draft
         else:
             print(f"Creating release {tag}...")
             created = create_release(
@@ -307,7 +321,16 @@ def main() -> None:
                     file=sys.stderr,
                 )
                 _repair_tag_name(owner, repo, created, tag, token)
+            resolved = created
 
+    # ~keep Hand the id we already hold to the upload step instead of letting it re-derive the
+    # ~keep same release from the listing endpoint. That second derivation loses a read-after-write
+    # ~keep race: tslp v1.19.1 created a draft at 13:36:19 and the upload failed at 13:36:28 with
+    # ~keep "not found (checked drafts and published)" -- 8.3s later, against a draft that was real
+    # ~keep and sat at index 0 of page 1. One fact derived twice across an eventual-consistency
+    # ~keep window. A retry would only widen the window; not re-deriving it closes the race.
+    release_id = int(resolved.get("id", 0)) if resolved else 0
+    write_github_output("release-id", str(release_id))
     print(f"Release {tag} ready")
 
 
