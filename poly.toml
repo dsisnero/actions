@@ -28,6 +28,11 @@ exclude = [
 # Do not add new paths here without a very good reason. ~keep
 "publish-maven/scripts/deploy.py" = ["function-too-long"]
 # --- end quality-debt baseline ---
+
+# ai-rulez rule bodies are fragments, not documents: the generator emits the `### <rule-name>`
+# heading itself and splices the body underneath, so a level-1 heading here would render a
+# stray H1 inside CLAUDE.md's rules section. ~keep
+".ai-rulez/rules/*.md" = ["MD041"]
 # Stylistic rules disabled repo-wide. Each is a formatting or idiom preference with no
 # correctness or security consequence, and each fires in volumes no one can hand-maintain
 # (`require-unicode-regexp` alone was 724 across the polyrepo, `no-inline-comments` 200).
