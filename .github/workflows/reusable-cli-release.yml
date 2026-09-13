@@ -43,6 +43,20 @@ on:
         required: false
         type: boolean
         default: false
+      undraft-release:
+        description: >
+          Publish the release before uploading CLI assets, so channels that resolve
+          them (scoop, cargo-binstall) can reach the download URLs.
+
+          Set false in a repo that gates promotion itself. crawlberg keeps its release
+          a draft until every registry has published and its asset inventory is
+          verified; this step un-drafted it anyway, so v1.6.3 went public with one of
+          five crates missing from crates.io while the job that exists to make that
+          decision was correctly skipped. Defaults true to preserve existing behaviour
+          for repos with no promotion gate of their own.
+        required: false
+        type: boolean
+        default: true
       targets:
         description: >
           JSON array of {os, target} objects for the core (required) matrix.
@@ -292,6 +306,7 @@ jobs:
           cat "${ASSET_PREFIX}SHA256SUMS"
 
       - name: Ensure release is published (un-draft)
+        if: ${{ inputs.undraft-release }}
         uses: xberg-io/actions/publish-github-release@v1
         with:
           tag: ${{ inputs.tag }}
