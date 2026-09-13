@@ -33,6 +33,15 @@ teardown_file() {
 }
 
 setup() {
+	# ~keep CI runs this suite through ./run-bats itself, so the outer action exports its own
+	# INPUT_PATH and INPUT_ARGS into this process -- and `run env FOO=bar ...` ADDS to the
+	# inherited environment rather than replacing it. Without this, the default-path tests read
+	# the outer action's `path: .` and assert against the wrong directory. Locally there is no
+	# outer action and they pass, so the leak is invisible off CI. Clear the whole prefix so
+	# each test starts from nothing and sets only what it means to exercise.
+	for _leaked_input in $(env | sed -n 's/^\(INPUT_[A-Za-z0-9_]*\)=.*/\1/p'); do
+		unset "$_leaked_input"
+	done
 	TEST_ROOT="$(mktemp -d)"
 	STUB_BIN="$TEST_ROOT/bin"
 	INSTALL_DIR="$TEST_ROOT/install"

@@ -109,3 +109,30 @@ make_stub() {
 	[ "$status" -eq 1 ]
 	[ "$output" = "Error: unsupported OS: FreeBSD" ]
 }
+
+# ~keep `auth_args` is empty whenever GITHUB_TOKEN is unset, and a bare `"${auth_args[@]}"` on
+# an empty array is an unbound-variable error under `set -u` before bash 4.4 -- /bin/bash on
+# every macOS runner. Running the script under /bin/bash rather than the PATH bash is what makes
+# this test able to fail at all: bats itself runs under whatever newer bash is first on PATH,
+# where the bug does not reproduce.
+@test "unix should_resolve_the_latest_tag_without_an_authorization_header_when_no_token_is_set" {
+	make_stub uname '#!/usr/bin/env bash' \
+		'if [ "$1" = "-s" ]; then printf "%s\n" Linux; else printf "%s\n" x86_64; fi'
+	make_stub curl '#!/usr/bin/env bash' \
+		'printf "%s\n" "$@" >>"$CURL_ARGV"' \
+		'if [ "$1" = "--silent" ] && [ "$2" = "--fail" ]; then printf "%s\n" "  \"tag_name\": \"v2.50.0\","; exit 0; fi' \
+		'exit 99'
+
+	# `env -u NAME` is the portable spelling; GNU's `--unset=NAME` long form does not exist in
+	# BSD env, so it would fail on the macOS runner this test exists to protect.
+	run env -u GITHUB_TOKEN \
+		PATH="$STUB_BIN:$SYS_BIN" HOME="$TEST_ROOT/home" CURL_ARGV="$TEST_ROOT/curl-argv" \
+		/bin/bash "$BATS_TEST_DIRNAME/../scripts/unix.sh" latest
+
+	[ "$status" -ne 0 ] || true
+	# The resolve step must have run and produced no Authorization header.
+	[ -s "$TEST_ROOT/curl-argv" ]
+	! grep -q "Authorization" "$TEST_ROOT/curl-argv"
+	! printf '%s' "$output" | grep -q "unbound variable"
+	! printf '%s' "$output" | grep -q "could not resolve latest gh release"
+}
