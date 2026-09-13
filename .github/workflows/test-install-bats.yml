@@ -9,6 +9,9 @@ on:
       - "install-bats/**"
       - ".github/workflows/test-install-bats.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test-latest:
     strategy:

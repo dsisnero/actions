@@ -9,6 +9,9 @@ on:
       - "publish-homebrew-source-formulas/**"
       - ".github/workflows/test-publish-homebrew-source-formulas.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

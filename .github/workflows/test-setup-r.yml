@@ -9,6 +9,9 @@ on:
       - "setup-r/**"
       - ".github/workflows/test-setup-r.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

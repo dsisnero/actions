@@ -9,6 +9,9 @@ on:
       - "validate-versions/**"
       - ".github/workflows/test-validate-versions.yml"
 
+permissions:
+  contents: read
+
 jobs:
   matching:
     runs-on: ubuntu-latest

@@ -9,6 +9,9 @@ on:
       - "build-rust-cli/**"
       - ".github/workflows/test-build-rust-cli.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

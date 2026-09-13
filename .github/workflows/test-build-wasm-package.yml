@@ -9,6 +9,9 @@ on:
       - "build-wasm-package/**"
       - ".github/workflows/test-build-wasm-package.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

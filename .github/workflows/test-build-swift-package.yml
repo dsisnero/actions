@@ -9,6 +9,9 @@ on:
       - "build-swift-package/**"
       - ".github/workflows/test-build-swift-package.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test-dry-run:
     runs-on: ubuntu-latest

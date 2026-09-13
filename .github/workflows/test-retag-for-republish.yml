@@ -9,6 +9,9 @@ on:
       - "retag-for-republish/**"
       - ".github/workflows/test-retag-for-republish.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -9,6 +9,9 @@ on:
       - "setup-go-cgo-env/**"
       - ".github/workflows/test-setup-go-cgo-env.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

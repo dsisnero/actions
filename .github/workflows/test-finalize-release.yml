@@ -9,6 +9,9 @@ on:
       - "finalize-release/**"
       - ".github/workflows/test-finalize-release.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -20,6 +20,9 @@ on:
       - ".github/workflows/reusable-validate.yml"
       - ".github/workflows/test-unit.yml"
 
+permissions:
+  contents: read
+
 jobs:
   pytest:
     runs-on: ubuntu-latest

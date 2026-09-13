@@ -9,6 +9,9 @@ on:
       - "build-python-wheels/**"
       - ".github/workflows/test-build-python-wheels.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

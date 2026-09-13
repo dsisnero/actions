@@ -9,6 +9,9 @@ on:
       - "build-java-natives/**"
       - ".github/workflows/test-build-java-natives.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

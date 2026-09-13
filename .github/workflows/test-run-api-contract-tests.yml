@@ -9,6 +9,9 @@ on:
       - "run-api-contract-tests/**"
       - ".github/workflows/test-run-api-contract-tests.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

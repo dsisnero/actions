@@ -9,6 +9,9 @@ on:
       - "build-python-sdist/**"
       - ".github/workflows/test-build-python-sdist.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

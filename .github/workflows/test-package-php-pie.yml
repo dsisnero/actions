@@ -9,6 +9,9 @@ on:
       - "package-php-pie/**"
       - ".github/workflows/test-package-php-pie.yml"
 
+permissions:
+  contents: read
+
 jobs:
   validate-input-branch:
     runs-on: ubuntu-latest

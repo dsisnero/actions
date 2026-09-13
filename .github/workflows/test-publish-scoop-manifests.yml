@@ -9,6 +9,9 @@ on:
       - "publish-scoop-manifests/**"
       - ".github/workflows/test-publish-scoop-manifests.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

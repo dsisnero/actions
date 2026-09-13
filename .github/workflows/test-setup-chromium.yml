@@ -11,6 +11,9 @@ on:
       - setup-chromium/**
       - .github/workflows/test-setup-chromium.yml
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test on ${{ matrix.os }}

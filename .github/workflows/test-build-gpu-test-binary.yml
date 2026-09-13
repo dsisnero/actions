@@ -9,6 +9,9 @@ on:
       - "build-gpu-test-binary/**"
       - ".github/workflows/test-build-gpu-test-binary.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

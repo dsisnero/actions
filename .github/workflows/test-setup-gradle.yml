@@ -9,6 +9,9 @@ on:
       - "setup-gradle/**"
       - ".github/workflows/test-setup-gradle.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

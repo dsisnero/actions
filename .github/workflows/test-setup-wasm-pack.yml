@@ -9,6 +9,9 @@ on:
       - "setup-wasm-pack/**"
       - ".github/workflows/test-setup-wasm-pack.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

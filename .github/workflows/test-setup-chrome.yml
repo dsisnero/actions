@@ -9,6 +9,9 @@ on:
       - "setup-chrome/**"
       - ".github/workflows/test-setup-chrome.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

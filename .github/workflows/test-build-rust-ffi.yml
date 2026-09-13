@@ -9,6 +9,9 @@ on:
       - "build-rust-ffi/**"
       - ".github/workflows/test-build-rust-ffi.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}

@@ -9,6 +9,9 @@ on:
       - "fetch-test-documents/**"
       - ".github/workflows/test-fetch-test-documents.yml"
 
+permissions:
+  contents: read
+
 jobs:
   missing-manifest-fails-clearly:
     name: Missing manifest fails clearly

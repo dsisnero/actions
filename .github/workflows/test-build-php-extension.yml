@@ -11,6 +11,9 @@ on:
       - "tests/test_build_php_extension.py"
       - ".github/workflows/test-build-php-extension.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -9,6 +9,9 @@ on:
       - "install-homebrew-linux/**"
       - ".github/workflows/test-install-homebrew-linux.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

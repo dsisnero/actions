@@ -9,6 +9,9 @@ on:
       - "install-alef/**"
       - ".github/workflows/test-install-alef.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

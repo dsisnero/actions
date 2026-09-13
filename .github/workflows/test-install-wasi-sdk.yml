@@ -9,6 +9,9 @@ on:
       - "install-wasi-sdk/**"
       - ".github/workflows/test-install-wasi-sdk.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

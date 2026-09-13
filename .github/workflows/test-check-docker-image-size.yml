@@ -9,6 +9,9 @@ on:
       - "check-docker-image-size/**"
       - ".github/workflows/test-check-docker-image-size.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

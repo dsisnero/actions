@@ -9,6 +9,9 @@ on:
       - "setup-elixir/**"
       - ".github/workflows/test-setup-elixir.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

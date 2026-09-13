@@ -9,6 +9,9 @@ on:
       - "run-bats/**"
       - ".github/workflows/test-run-bats.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

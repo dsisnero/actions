@@ -9,6 +9,9 @@ on:
       - "setup-php/**"
       - ".github/workflows/test-setup-php.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: PHP ${{ matrix.php-version }} on ${{ matrix.os }}

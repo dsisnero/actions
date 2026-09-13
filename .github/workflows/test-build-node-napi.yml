@@ -9,6 +9,9 @@ on:
       - "build-node-napi/**"
       - ".github/workflows/test-build-node-napi.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

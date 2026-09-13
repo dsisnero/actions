@@ -9,6 +9,9 @@ on:
       - "setup-rust/**"
       - ".github/workflows/test-setup-rust.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test-default:
     strategy:

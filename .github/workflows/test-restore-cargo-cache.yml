@@ -9,6 +9,9 @@ on:
       - "restore-cargo-cache/**"
       - ".github/workflows/test-restore-cargo-cache.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

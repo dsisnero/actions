@@ -11,6 +11,9 @@ on:
       - "wait-for-package/**"
       - ".github/workflows/test-publish-actions.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test-publish-npm-dry-run:
     runs-on: ubuntu-latest

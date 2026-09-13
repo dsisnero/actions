@@ -13,6 +13,9 @@ on:
       - .github/workflows/reusable-validate-pr.yml
       - .github/workflows/test-validate.yml
 
+permissions:
+  contents: read
+
 jobs:
   issue-titles:
     name: Issue Title Regex

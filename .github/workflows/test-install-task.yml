@@ -9,6 +9,9 @@ on:
       - "install-task/**"
       - ".github/workflows/test-install-task.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

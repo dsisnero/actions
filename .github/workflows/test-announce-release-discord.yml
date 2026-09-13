@@ -9,6 +9,9 @@ on:
       - "announce-release-discord/**"
       - ".github/workflows/test-announce-release-discord.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

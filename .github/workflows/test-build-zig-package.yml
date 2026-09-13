@@ -9,6 +9,9 @@ on:
       - "build-zig-package/**"
       - ".github/workflows/test-build-zig-package.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

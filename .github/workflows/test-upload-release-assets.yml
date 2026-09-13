@@ -9,6 +9,9 @@ on:
       - "upload-release-assets/**"
       - ".github/workflows/test-upload-release-assets.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

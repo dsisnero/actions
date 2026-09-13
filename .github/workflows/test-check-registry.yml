@@ -9,6 +9,9 @@ on:
       - "check-registry/**"
       - ".github/workflows/test-check-registry.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

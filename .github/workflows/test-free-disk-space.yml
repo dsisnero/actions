@@ -9,6 +9,9 @@ on:
       - "free-disk-space-linux/**"
       - ".github/workflows/test-free-disk-space.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

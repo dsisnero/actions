@@ -9,6 +9,9 @@ on:
       - "build-elixir-natives/**"
       - ".github/workflows/test-build-elixir-natives.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

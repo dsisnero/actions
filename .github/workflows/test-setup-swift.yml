@@ -9,6 +9,9 @@ on:
       - "setup-swift/**"
       - ".github/workflows/test-setup-swift.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

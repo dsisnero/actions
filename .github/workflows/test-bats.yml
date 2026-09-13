@@ -18,6 +18,9 @@ on:
       - "Taskfile.yml"
       - ".github/workflows/test-bats.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Bats on ${{ matrix.os }}

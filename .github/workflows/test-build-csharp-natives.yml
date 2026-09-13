@@ -9,6 +9,9 @@ on:
       - "build-csharp-natives/**"
       - ".github/workflows/test-build-csharp-natives.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

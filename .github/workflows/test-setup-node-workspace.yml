@@ -9,6 +9,9 @@ on:
       - "setup-node-workspace/**"
       - ".github/workflows/test-setup-node-workspace.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

@@ -9,6 +9,9 @@ on:
       - "verify-platform-packages/**"
       - ".github/workflows/test-verify-platform-packages.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

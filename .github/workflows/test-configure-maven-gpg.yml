@@ -9,6 +9,9 @@ on:
       - "configure-maven-gpg/**"
       - ".github/workflows/test-configure-maven-gpg.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

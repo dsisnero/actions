@@ -9,6 +9,9 @@ on:
       - "setup-python-env/**"
       - ".github/workflows/test-setup-python-env.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

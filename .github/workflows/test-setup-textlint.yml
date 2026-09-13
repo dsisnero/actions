@@ -9,6 +9,9 @@ on:
       - "setup-textlint/**"
       - ".github/workflows/test-setup-textlint.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

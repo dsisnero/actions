@@ -9,6 +9,9 @@ on:
       - "build-dart-package/**"
       - ".github/workflows/test-build-dart-package.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test-dry-run:
     runs-on: ubuntu-latest

@@ -9,6 +9,9 @@ on:
       - "setup-maven/**"
       - ".github/workflows/test-setup-maven.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:

@@ -9,6 +9,9 @@ on:
       - "build-elixir-hex/**"
       - ".github/workflows/test-build-elixir-hex.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
