@@ -126,9 +126,16 @@ Describe 'install-system-deps install-windows.ps1' {
     It 'should_warn_and_skip_the_vcpkg_installs_when_the_vcpkg_executable_is_absent' {
         $env:LIBHEIF_CACHE_HIT = 'false'
 
+        # ~keep The script interpolates the path straight from Join-Path, which the suite mocks
+        # ~keep to [IO.Path]::Combine -- and that emits the HOST separator, so the message reads
+        # ~keep "C:\vcpkg/vcpkg.exe" here and "C:\vcpkg\vcpkg.exe" on a Windows runner. Hardcoding
+        # ~keep the POSIX spelling made this assertion pass only off Windows. Build the expected
+        # ~keep path the same way the script does rather than pinning one platform's separator.
+        $expectedVcpkgExe = [System.IO.Path]::Combine('C:\vcpkg', 'vcpkg.exe')
+
         $output = @(& $script:Script 6>&1 | ForEach-Object { $_.ToString() })
 
-        $output | Should -Contain '::warning::vcpkg.exe not found at C:\vcpkg/vcpkg.exe; skipping libheif/boost/zlib install'
+        $output | Should -Contain "::warning::vcpkg.exe not found at ${expectedVcpkgExe}; skipping libheif/boost/zlib install"
     }
 
     It 'should_warn_but_continue_when_the_optional_tesseract_install_fails' {
