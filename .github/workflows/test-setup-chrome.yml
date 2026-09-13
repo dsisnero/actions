@@ -1,6 +1,7 @@
 name: Test setup-chrome
 on:
   push:
+    branches: [main]
     paths:
       - "setup-chrome/**"
       - ".github/workflows/test-setup-chrome.yml"

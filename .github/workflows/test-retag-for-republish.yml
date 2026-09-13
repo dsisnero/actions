@@ -1,6 +1,7 @@
 name: Test retag-for-republish
 on:
   push:
+    branches: [main]
     paths:
       - "retag-for-republish/**"
       - ".github/workflows/test-retag-for-republish.yml"

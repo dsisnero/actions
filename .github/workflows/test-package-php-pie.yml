@@ -1,6 +1,7 @@
 name: Test package-php-pie
 on:
   push:
+    branches: [main]
     paths:
       - "package-php-pie/**"
       - ".github/workflows/test-package-php-pie.yml"

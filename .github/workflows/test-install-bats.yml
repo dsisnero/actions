@@ -1,6 +1,7 @@
 name: Test install-bats
 on:
   push:
+    branches: [main]
     paths:
       - "install-bats/**"
       - ".github/workflows/test-install-bats.yml"

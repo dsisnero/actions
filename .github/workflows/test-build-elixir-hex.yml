@@ -1,6 +1,7 @@
 name: Test build-elixir-hex
 on:
   push:
+    branches: [main]
     paths:
       - "build-elixir-hex/**"
       - ".github/workflows/test-build-elixir-hex.yml"

@@ -1,6 +1,7 @@
 name: Test build-go-ffi
 on:
   push:
+    branches: [main]
     paths:
       - "build-go-ffi/**"
       - ".github/workflows/test-build-go-ffi.yml"

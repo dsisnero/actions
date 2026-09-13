@@ -1,6 +1,7 @@
 name: Test validate-versions
 on:
   push:
+    branches: [main]
     paths:
       - "validate-versions/**"
       - ".github/workflows/test-validate-versions.yml"

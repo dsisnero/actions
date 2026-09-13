@@ -1,6 +1,7 @@
 name: Test build-zig-package
 on:
   push:
+    branches: [main]
     paths:
       - "build-zig-package/**"
       - ".github/workflows/test-build-zig-package.yml"

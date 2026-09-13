@@ -1,6 +1,7 @@
 name: Test install-task
 on:
   push:
+    branches: [main]
     paths:
       - "install-task/**"
       - ".github/workflows/test-install-task.yml"

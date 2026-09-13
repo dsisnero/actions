@@ -1,6 +1,7 @@
 name: Test prepare-release-metadata
 on:
   push:
+    branches: [main]
     paths:
       - "prepare-release-metadata/**"
       - ".github/workflows/test-prepare-release-metadata.yml"

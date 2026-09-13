@@ -1,6 +1,7 @@
 name: Test setup-go-cgo-env
 on:
   push:
+    branches: [main]
     paths:
       - "setup-go-cgo-env/**"
       - ".github/workflows/test-setup-go-cgo-env.yml"

@@ -1,6 +1,7 @@
 name: Test build-node-napi
 on:
   push:
+    branches: [main]
     paths:
       - "build-node-napi/**"
       - ".github/workflows/test-build-node-napi.yml"

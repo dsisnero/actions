@@ -1,6 +1,7 @@
 name: Test install-homebrew-linux
 on:
   push:
+    branches: [main]
     paths:
       - "install-homebrew-linux/**"
       - ".github/workflows/test-install-homebrew-linux.yml"

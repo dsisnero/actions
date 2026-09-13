@@ -1,6 +1,7 @@
 name: Test restore-cargo-cache
 on:
   push:
+    branches: [main]
     paths:
       - "restore-cargo-cache/**"
       - ".github/workflows/test-restore-cargo-cache.yml"

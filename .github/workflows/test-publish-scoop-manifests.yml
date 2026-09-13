@@ -1,6 +1,7 @@
 name: Test publish-scoop-manifests
 on:
   push:
+    branches: [main]
     paths:
       - "publish-scoop-manifests/**"
       - ".github/workflows/test-publish-scoop-manifests.yml"

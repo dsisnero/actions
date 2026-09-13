@@ -1,6 +1,7 @@
 name: Test run-api-contract-tests
 on:
   push:
+    branches: [main]
     paths:
       - "run-api-contract-tests/**"
       - ".github/workflows/test-run-api-contract-tests.yml"

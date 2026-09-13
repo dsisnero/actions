@@ -1,6 +1,7 @@
 name: Test build-python-sdist
 on:
   push:
+    branches: [main]
     paths:
       - "build-python-sdist/**"
       - ".github/workflows/test-build-python-sdist.yml"

@@ -1,6 +1,7 @@
 name: Test build-dart-package
 on:
   push:
+    branches: [main]
     paths:
       - "build-dart-package/**"
       - ".github/workflows/test-build-dart-package.yml"

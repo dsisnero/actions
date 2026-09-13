@@ -1,6 +1,7 @@
 name: Test build-python-wheels
 on:
   push:
+    branches: [main]
     paths:
       - "build-python-wheels/**"
       - ".github/workflows/test-build-python-wheels.yml"

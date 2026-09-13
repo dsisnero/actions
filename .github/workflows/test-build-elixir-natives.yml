@@ -1,6 +1,7 @@
 name: Test build-elixir-natives
 on:
   push:
+    branches: [main]
     paths:
       - "build-elixir-natives/**"
       - ".github/workflows/test-build-elixir-natives.yml"

@@ -1,6 +1,7 @@
 name: Test build-swift-package
 on:
   push:
+    branches: [main]
     paths:
       - "build-swift-package/**"
       - ".github/workflows/test-build-swift-package.yml"

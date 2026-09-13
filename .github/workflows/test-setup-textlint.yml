@@ -1,6 +1,7 @@
 name: Test setup-textlint
 on:
   push:
+    branches: [main]
     paths:
       - "setup-textlint/**"
       - ".github/workflows/test-setup-textlint.yml"

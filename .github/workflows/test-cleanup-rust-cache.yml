@@ -1,6 +1,7 @@
 name: Test cleanup-rust-cache
 on:
   push:
+    branches: [main]
     paths:
       - "cleanup-rust-cache/**"
       - ".github/workflows/test-cleanup-rust-cache.yml"

@@ -1,6 +1,7 @@
 name: Test fetch-test-documents
 on:
   push:
+    branches: [main]
     paths:
       - "fetch-test-documents/**"
       - ".github/workflows/test-fetch-test-documents.yml"

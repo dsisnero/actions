@@ -1,6 +1,7 @@
 name: Test build-php-extension
 on:
   push:
+    branches: [main]
     paths:
       - "build-php-extension/**"
       - "tests/test_build_php_extension.py"

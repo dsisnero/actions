@@ -1,6 +1,7 @@
 name: Test build-gpu-test-binary
 on:
   push:
+    branches: [main]
     paths:
       - "build-gpu-test-binary/**"
       - ".github/workflows/test-build-gpu-test-binary.yml"

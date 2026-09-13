@@ -1,6 +1,7 @@
 name: Test build-rust-cli
 on:
   push:
+    branches: [main]
     paths:
       - "build-rust-cli/**"
       - ".github/workflows/test-build-rust-cli.yml"

@@ -1,6 +1,7 @@
 name: Test setup-python-env
 on:
   push:
+    branches: [main]
     paths:
       - "setup-python-env/**"
       - ".github/workflows/test-setup-python-env.yml"

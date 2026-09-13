@@ -1,6 +1,7 @@
 name: Test publish-homebrew-source-formulas
 on:
   push:
+    branches: [main]
     paths:
       - "publish-homebrew-source-formulas/**"
       - ".github/workflows/test-publish-homebrew-source-formulas.yml"

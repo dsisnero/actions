@@ -1,6 +1,7 @@
 name: Test install-wasi-sdk
 on:
   push:
+    branches: [main]
     paths:
       - "install-wasi-sdk/**"
       - ".github/workflows/test-install-wasi-sdk.yml"

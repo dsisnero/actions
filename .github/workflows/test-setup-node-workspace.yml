@@ -1,6 +1,7 @@
 name: Test setup-node-workspace
 on:
   push:
+    branches: [main]
     paths:
       - "setup-node-workspace/**"
       - ".github/workflows/test-setup-node-workspace.yml"

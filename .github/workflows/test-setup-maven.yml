@@ -1,6 +1,7 @@
 name: Test setup-maven
 on:
   push:
+    branches: [main]
     paths:
       - "setup-maven/**"
       - ".github/workflows/test-setup-maven.yml"

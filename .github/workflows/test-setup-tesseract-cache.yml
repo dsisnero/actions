@@ -1,6 +1,7 @@
 name: Test setup-tesseract-cache
 on:
   push:
+    branches: [main]
     paths:
       - "setup-tesseract-cache/**"
       - ".github/workflows/test-setup-tesseract-cache.yml"

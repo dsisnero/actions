@@ -1,6 +1,7 @@
 name: Test setup-r
 on:
   push:
+    branches: [main]
     paths:
       - "setup-r/**"
       - ".github/workflows/test-setup-r.yml"

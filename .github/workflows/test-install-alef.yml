@@ -1,6 +1,7 @@
 name: Test install-alef
 on:
   push:
+    branches: [main]
     paths:
       - "install-alef/**"
       - ".github/workflows/test-install-alef.yml"

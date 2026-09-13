@@ -1,6 +1,7 @@
 name: Test setup-onnx-runtime
 on:
   push:
+    branches: [main]
     paths:
       - "setup-onnx-runtime/**"
       - ".github/workflows/test-setup-onnx-runtime.yml"

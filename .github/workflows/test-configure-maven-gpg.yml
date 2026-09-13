@@ -1,6 +1,7 @@
 name: Test configure-maven-gpg
 on:
   push:
+    branches: [main]
     paths:
       - "configure-maven-gpg/**"
       - ".github/workflows/test-configure-maven-gpg.yml"

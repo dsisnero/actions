@@ -1,6 +1,7 @@
 name: Test finalize-release
 on:
   push:
+    branches: [main]
     paths:
       - "finalize-release/**"
       - ".github/workflows/test-finalize-release.yml"

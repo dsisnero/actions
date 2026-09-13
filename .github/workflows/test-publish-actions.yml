@@ -1,6 +1,7 @@
 name: Test publish actions (dry-run)
 on:
   push:
+    branches: [main]
     paths:
       - "publish-*/**"
       - "wait-for-package/**"

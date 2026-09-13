@@ -1,6 +1,7 @@
 name: Test setup-php
 on:
   push:
+    branches: [main]
     paths:
       - "setup-php/**"
       - ".github/workflows/test-setup-php.yml"

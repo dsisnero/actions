@@ -1,6 +1,7 @@
 name: Test check-docker-image-size
 on:
   push:
+    branches: [main]
     paths:
       - "check-docker-image-size/**"
       - ".github/workflows/test-check-docker-image-size.yml"

@@ -1,6 +1,7 @@
 name: Test run-bats
 on:
   push:
+    branches: [main]
     paths:
       - "run-bats/**"
       - ".github/workflows/test-run-bats.yml"

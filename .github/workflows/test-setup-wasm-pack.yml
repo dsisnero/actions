@@ -1,6 +1,7 @@
 name: Test setup-wasm-pack
 on:
   push:
+    branches: [main]
     paths:
       - "setup-wasm-pack/**"
       - ".github/workflows/test-setup-wasm-pack.yml"

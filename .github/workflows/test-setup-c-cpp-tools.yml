@@ -1,6 +1,7 @@
 name: Test setup-c-cpp-tools
 on:
   push:
+    branches: [main]
     paths:
       - "setup-c-cpp-tools/**"
       - ".github/workflows/test-setup-c-cpp-tools.yml"

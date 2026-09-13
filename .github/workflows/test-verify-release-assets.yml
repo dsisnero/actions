@@ -1,6 +1,7 @@
 name: Test verify-release-assets
 on:
   push:
+    branches: [main]
     paths:
       - "verify-release-assets/**"
       - ".github/workflows/test-verify-release-assets.yml"

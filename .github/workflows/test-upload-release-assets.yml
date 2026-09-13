@@ -1,6 +1,7 @@
 name: Test upload-release-assets
 on:
   push:
+    branches: [main]
     paths:
       - "upload-release-assets/**"
       - ".github/workflows/test-upload-release-assets.yml"

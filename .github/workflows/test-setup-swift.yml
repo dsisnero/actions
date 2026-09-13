@@ -1,6 +1,7 @@
 name: Test setup-swift
 on:
   push:
+    branches: [main]
     paths:
       - "setup-swift/**"
       - ".github/workflows/test-setup-swift.yml"

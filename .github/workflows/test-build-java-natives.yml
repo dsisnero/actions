@@ -1,6 +1,7 @@
 name: Test build-java-natives
 on:
   push:
+    branches: [main]
     paths:
       - "build-java-natives/**"
       - ".github/workflows/test-build-java-natives.yml"

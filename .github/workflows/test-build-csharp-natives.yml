@@ -1,6 +1,7 @@
 name: Test build-csharp-natives
 on:
   push:
+    branches: [main]
     paths:
       - "build-csharp-natives/**"
       - ".github/workflows/test-build-csharp-natives.yml"

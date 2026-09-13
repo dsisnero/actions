@@ -1,6 +1,7 @@
 name: Test verify-platform-packages
 on:
   push:
+    branches: [main]
     paths:
       - "verify-platform-packages/**"
       - ".github/workflows/test-verify-platform-packages.yml"

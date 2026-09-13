@@ -1,6 +1,7 @@
 name: Test announce-release-discord
 on:
   push:
+    branches: [main]
     paths:
       - "announce-release-discord/**"
       - ".github/workflows/test-announce-release-discord.yml"

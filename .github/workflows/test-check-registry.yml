@@ -1,6 +1,7 @@
 name: Test check-registry
 on:
   push:
+    branches: [main]
     paths:
       - "check-registry/**"
       - ".github/workflows/test-check-registry.yml"

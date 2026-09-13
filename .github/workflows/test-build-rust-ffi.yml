@@ -1,6 +1,7 @@
 name: Test build-rust-ffi
 on:
   push:
+    branches: [main]
     paths:
       - "build-rust-ffi/**"
       - ".github/workflows/test-build-rust-ffi.yml"

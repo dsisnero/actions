@@ -1,6 +1,7 @@
 name: Test setup-gradle
 on:
   push:
+    branches: [main]
     paths:
       - "setup-gradle/**"
       - ".github/workflows/test-setup-gradle.yml"
