@@ -1,4 +1,20 @@
 BeforeAll {
+    # ~keep Deliberately NOT a call into the script's own ConvertTo-Msys2Path: an expectation
+    # ~keep produced by the code under test matches that code however broken it is. This walks
+    # ~keep characters where the script uses a regex, so the two cannot share a defect, and
+    # ~keep should_translate_a_windows_drive_path_into_its_msys2_equivalent pins both against a
+    # ~keep literal C:\ws -> /c/ws. Needed because the temp root carries a drive letter on a
+    # ~keep Windows runner and none on POSIX -- these six assertions passed on macOS only
+    # ~keep because the conversion was a no-op there, so they asserted nothing about it.
+    function ConvertTo-ExpectedMsys2Path {
+        param([string]$WindowsPath)
+        $forward = $WindowsPath.Replace('\', '/')
+        if ($forward.Length -ge 2 -and $forward[1] -eq ':') {
+            return '/' + [char]::ToLowerInvariant($forward[0]) + $forward.Substring(2)
+        }
+        return $forward
+    }
+
     $script:Script = Join-Path $PSScriptRoot '..' 'scripts' 'windows.ps1'
 
     # ~keep CI runs all nine suites in a single pwsh process, so an environment variable left
@@ -13,6 +29,7 @@ BeforeAll {
 Describe 'setup-go-cgo-env windows.ps1' {
     BeforeEach {
         $script:Root = Join-Path ([System.IO.Path]::GetTempPath()) "go-cgo-$(New-Guid)"
+        $script:ExpectedRoot = ConvertTo-ExpectedMsys2Path $script:Root
         New-Item -ItemType Directory -Path (Join-Path $script:Root 'target/release') -Force | Out-Null
         $script:GithubEnv = Join-Path $script:Root 'github-env'
         $script:GithubPath = Join-Path $script:Root 'github-path'
@@ -61,10 +78,10 @@ Describe 'setup-go-cgo-env windows.ps1' {
         & $script:Script 'target/release' 'crates/xberg-ffi' 'xberg_ffi' | Out-Null
 
         Get-Content -LiteralPath $script:GithubEnv | Should -BeExactly @(
-            "PKG_CONFIG_PATH=$script:Root/crates/xberg-ffi"
+            "PKG_CONFIG_PATH=$script:ExpectedRoot/crates/xberg-ffi"
             'CGO_ENABLED=1'
-            "CGO_CFLAGS=-I$script:Root/crates/xberg-ffi/include"
-            "CGO_LDFLAGS=-L$script:Root/target/release"
+            "CGO_CFLAGS=-I$script:ExpectedRoot/crates/xberg-ffi/include"
+            "CGO_LDFLAGS=-L$script:ExpectedRoot/target/release"
         )
     }
 
@@ -79,10 +96,10 @@ Describe 'setup-go-cgo-env windows.ps1' {
         & $script:Script '' '' '' | Out-Null
 
         Get-Content -LiteralPath $script:GithubEnv | Should -BeExactly @(
-            "PKG_CONFIG_PATH=$script:Root/crates/xberg-ffi"
+            "PKG_CONFIG_PATH=$script:ExpectedRoot/crates/xberg-ffi"
             'CGO_ENABLED=1'
-            "CGO_CFLAGS=-I$script:Root/crates/xberg-ffi/include"
-            "CGO_LDFLAGS=-L$script:Root/target/release"
+            "CGO_CFLAGS=-I$script:ExpectedRoot/crates/xberg-ffi/include"
+            "CGO_LDFLAGS=-L$script:ExpectedRoot/target/release"
         )
     }
 
@@ -93,7 +110,7 @@ Describe 'setup-go-cgo-env windows.ps1' {
         $output = @(& $script:Script 'target/release' 6>&1 | ForEach-Object { $_.ToString() })
 
         $output | Should -Contain "Using Windows GNU target path: $(Join-Path $script:Root 'target/x86_64-pc-windows-gnu/release')"
-        Get-Content -LiteralPath $script:GithubEnv | Should -Contain "CGO_LDFLAGS=-L$script:Root/target/x86_64-pc-windows-gnu/release"
+        Get-Content -LiteralPath $script:GithubEnv | Should -Contain "CGO_LDFLAGS=-L$script:ExpectedRoot/target/x86_64-pc-windows-gnu/release"
     }
 
     It 'should_translate_a_windows_drive_path_into_its_msys2_equivalent' {
@@ -119,7 +136,7 @@ Describe 'setup-go-cgo-env windows.ps1' {
 
         & $script:Script 'target/release' 'crates/xberg-ffi' | Out-Null
 
-        Get-Content -LiteralPath $script:GithubEnv | Should -Contain "PKG_CONFIG_PATH=$script:Root/crates/xberg-ffi:/usr/lib/pkgconfig"
+        Get-Content -LiteralPath $script:GithubEnv | Should -Contain "PKG_CONFIG_PATH=$script:ExpectedRoot/crates/xberg-ffi:/usr/lib/pkgconfig"
     }
 
     It 'should_add_the_ffi_directory_to_github_path' {
@@ -135,14 +152,14 @@ Describe 'setup-go-cgo-env windows.ps1' {
 
         $output | Should -Contain 'Using MinGW64 toolchain: C:\msys64\mingw64\bin'
         Get-Content -LiteralPath $script:GithubEnv | Should -BeExactly @(
-            "PKG_CONFIG_PATH=$script:Root/crates/xberg-ffi"
+            "PKG_CONFIG_PATH=$script:ExpectedRoot/crates/xberg-ffi"
             'CGO_ENABLED=1'
-            "CGO_CFLAGS=-I$script:Root/crates/xberg-ffi/include"
+            "CGO_CFLAGS=-I$script:ExpectedRoot/crates/xberg-ffi/include"
             'CC=x86_64-w64-mingw32-gcc'
             'CXX=x86_64-w64-mingw32-g++'
             'AR=x86_64-w64-mingw32-ar'
             'RANLIB=x86_64-w64-mingw32-ranlib'
-            "CGO_LDFLAGS=-L$script:Root/target/release"
+            "CGO_LDFLAGS=-L$script:ExpectedRoot/target/release"
         )
         Get-Content -LiteralPath $script:GithubPath | Should -Contain 'C:\msys64\mingw64\bin'
     }
@@ -176,10 +193,10 @@ Describe 'setup-go-cgo-env windows.ps1' {
         & $script:Script 'target/release' 'crates/custom-ffi' | Out-Null
 
         Get-Content -LiteralPath $script:GithubEnv | Should -BeExactly @(
-            "PKG_CONFIG_PATH=$script:Root/crates/custom-ffi"
+            "PKG_CONFIG_PATH=$script:ExpectedRoot/crates/custom-ffi"
             'CGO_ENABLED=1'
-            "CGO_CFLAGS=-I$script:Root/crates/custom-ffi/include"
-            "CGO_LDFLAGS=-L$script:Root/target/release"
+            "CGO_CFLAGS=-I$script:ExpectedRoot/crates/custom-ffi/include"
+            "CGO_LDFLAGS=-L$script:ExpectedRoot/target/release"
         )
     }
 

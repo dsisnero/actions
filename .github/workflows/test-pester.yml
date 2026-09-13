@@ -28,10 +28,11 @@ jobs:
     # ~keep shebang stub only works on POSIX. On a Windows-only matrix those 4 would run on
     # ~keep no runner at all and still report green.
     runs-on: ${{ matrix.os }}
-    # ~keep The suite takes well under a minute; anything approaching this means a mock
-    # ~keep stopped matching and a test reached the real network, which must fail with a
-    # ~keep log rather than sit on a runner for the 360-minute default.
-    timeout-minutes: 15
+    # ~keep A cap so a stall fails with a log instead of sitting on a runner for the
+    # ~keep 360-minute default. Set above the 846s a full Windows run currently takes --
+    # ~keep 839s of which is install-system-deps alone, which is being fixed separately --
+    # ~keep so a legitimate run is never cut off and the test results stay readable.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

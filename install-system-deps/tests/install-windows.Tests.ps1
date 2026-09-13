@@ -44,10 +44,20 @@ Describe 'install-system-deps install-windows.ps1' {
         # [IO.Path]::Combine is the same join without the drive lookup.
         Mock Join-Path { [System.IO.Path]::Combine($Path, $ChildPath) }
 
-        # ~keep Answering from the real filesystem via .NET keeps every "C:\Program Files\..."
-        # probe false without pretending anything about this host's PATH. Pester 6 throws
-        # rather than falling through when no -ParameterFilter matches, so a default is required.
-        Mock Test-Path { [System.IO.File]::Exists($Path) -or [System.IO.Directory]::Exists($Path) }
+        # ~keep A test-declared filesystem, absent by default. Answering from the REAL
+        # ~keep filesystem was not a mock at all: windows-latest genuinely ships
+        # ~keep C:\vcpkg\vcpkg.exe and C:\Program Files\CMake\bin, so the two tests about an
+        # ~keep ABSENT path were asserting against a present one and failed there while passing
+        # ~keep on macOS. Worse, a present C:\vcpkg made the script reach
+        # ~keep `& $vcpkgExe install libheif ...` -- a call BY PATH, which Pester cannot
+        # ~keep intercept -- so the real vcpkg built libheif and boost from source and cost
+        # ~keep ~14 minutes of CI wall clock, 839s of this job's 846s. Never declare
+        # ~keep C:/vcpkg/vcpkg.exe present here: that re-enables the real build.
+        # ~keep $global: not $script:, because $script: is invisible inside a Pester 6 mock body.
+        # ~keep Separators are normalised so one declaration matches on Windows and POSIX alike.
+        $global:VirtualPaths = [System.Collections.Generic.HashSet[string]]::new(
+            [System.StringComparer]::OrdinalIgnoreCase)
+        Mock Test-Path { $global:VirtualPaths.Contains(([string]$Path).Replace('\', '/')) }
         Mock Start-Sleep { }
         Mock Invoke-WebRequest { }
         Mock choco { $global:LASTEXITCODE = 0 }
@@ -56,6 +66,7 @@ Describe 'install-system-deps install-windows.ps1' {
     }
 
     AfterEach {
+        Remove-Variable -Name VirtualPaths -Scope Global -ErrorAction SilentlyContinue
         $env:PATH = $script:SavedPath
         $env:TESSDATA_PREFIX = $null
         $env:VCPKG_INSTALLATION_ROOT = $null
@@ -183,8 +194,10 @@ Describe 'install-system-deps install-windows.ps1' {
     It 'should_export_tessdata_prefix_when_tesseract_is_found_in_a_common_location' {
         $tesseractExe = 'C:\Program Files\Tesseract-OCR\tesseract.exe'
         $tessdata = 'C:\Program Files\Tesseract-OCR\tessdata'
-        Mock Test-Path { $true } -ParameterFilter { $Path -eq $tesseractExe }
-        Mock Test-Path { $true } -ParameterFilter { $Path -like '*Tesseract-OCR*tessdata' }
+        # ~keep Forward slashes: Split-Path/Join-Path normalise to the host separator, and the
+        # ~keep mock compares on the normalised form.
+        $global:VirtualPaths.Add('C:/Program Files/Tesseract-OCR/tesseract.exe') | Out-Null
+        $global:VirtualPaths.Add('C:/Program Files/Tesseract-OCR/tessdata') | Out-Null
 
         $output = @(& $script:Script 6>&1 | ForEach-Object { $_.ToString() })
 
