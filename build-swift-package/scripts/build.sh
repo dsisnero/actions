@@ -77,7 +77,14 @@ out_dir=""
 out_mtime=0
 for candidate in "${candidates[@]}"; do
 	if [[ -d "$candidate" ]]; then
-		mtime=$(stat -f '%m' "$candidate" 2>/dev/null || stat -c '%Y' "$candidate" 2>/dev/null || echo 0)
+		# ~keep GNU form first, and the result is checked for digits. The BSD form does not
+		# fail on Linux, it succeeds with the wrong thing: GNU stat reads `-f` as
+		# --file-system, treats '%m' as a filename, and prints filesystem details whose first
+		# field is `File: ...`. That string then reached `((mtime > out_mtime))`, where bash
+		# evaluates it as an arithmetic expression and `set -u` aborts on the undefined name
+		# `File`. BSD stat rejects `-c` outright, so trying GNU first fails cleanly there.
+		mtime=$(stat -c '%Y' "$candidate" 2>/dev/null || stat -f '%m' "$candidate" 2>/dev/null || echo 0)
+		[[ "$mtime" =~ ^[0-9]+$ ]] || mtime=0
 		if ((mtime > out_mtime)); then
 			out_mtime=$mtime
 			out_dir=$candidate

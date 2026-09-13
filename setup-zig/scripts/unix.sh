@@ -59,7 +59,14 @@ print(entry.get("version", key))
 PY
 }
 
-mapfile -t info < <(resolve_url "$version")
+# ~keep Read into the array by hand rather than with `mapfile`. `mapfile`/`readarray` is a
+# bash 4 builtin and macOS ships bash 3.2 as /bin/bash, which is what `#!/usr/bin/env bash`
+# resolves to on a macos runner -- the script died there with `mapfile: command not found`
+# and then took the resolved URL and version from an empty array.
+info=()
+while IFS= read -r line; do
+	info+=("$line")
+done < <(resolve_url "$version")
 url="${info[0]}"
 resolved_version="${info[1]}"
 

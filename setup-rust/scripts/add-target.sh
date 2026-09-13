@@ -46,15 +46,20 @@ if [[ "$target" == *"-unknown-linux-musl" ]] && [[ "$RUNNER_OS" == "Linux" ]]; t
 	sudo apt-get install -y musl-tools
 
 	cc_rs_var=$(echo "$target" | tr '-' '_')
+	# ~keep `${var^^}` is a bash 4 expansion and macOS ships bash 3.2, where it is a hard
+	# "bad substitution" under set -e rather than a silent no-op. Only a musl target reaches
+	# this branch so it has not fired in practice, but the uppercase form is derived with `tr`
+	# for the same reason the underscore form above is.
+	cc_rs_var_upper=$(echo "$cc_rs_var" | tr '[:lower:]' '[:upper:]')
 
 	echo "Configuring cc-rs environment variables for musl target"
 	{
 		echo "CC_${cc_rs_var}=musl-gcc"
 		echo "AR_${cc_rs_var}=ar"
-		echo "CARGO_TARGET_${cc_rs_var^^}_LINKER=musl-gcc"
+		echo "CARGO_TARGET_${cc_rs_var_upper}_LINKER=musl-gcc"
 	} >>"$GITHUB_ENV"
 
 	echo "Set CC_${cc_rs_var}=musl-gcc"
 	echo "Set AR_${cc_rs_var}=ar"
-	echo "Set CARGO_TARGET_${cc_rs_var^^}_LINKER=musl-gcc"
+	echo "Set CARGO_TARGET_${cc_rs_var_upper}_LINKER=musl-gcc"
 fi
