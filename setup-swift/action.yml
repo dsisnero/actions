@@ -25,8 +25,16 @@ runs:
           echo "installed=false" >> "$GITHUB_OUTPUT"
         fi
 
+    # ~keep The only floating action reference left in this repository. `latest` is a real,
+    # separately-maintained tag in SwiftyLab/setup-swift -- a distinct tag object from v1.14.0 --
+    # so it moves on the upstream maintainer's schedule and offered no protection against a bad
+    # push or a compromised account. Both currently dereference to the same commit, so this pin
+    # changes nothing about what runs today; it only stops the ref moving underneath us.
+    # Audited 2026-09-13: v1.14.0 is the newest non-prerelease (2026-04-27), its annotated tag
+    # object 76e3e48ac9c85b393a30adefd96afe0395b23c29 carries a GitHub-verified signature, and it
+    # points at the commit pinned below. Re-audit when bumping.
     - name: Install Swift via SwiftyLab/setup-swift
       if: steps.existing.outputs.installed != 'true'
-      uses: SwiftyLab/setup-swift@latest
+      uses: SwiftyLab/setup-swift@38f54a76b70d989321de9dc7c840618c08cf56e9 # v1.14.0
       with:
         swift-version: ${{ inputs.swift-version }}
