@@ -4,6 +4,35 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-09-13
+
+### Added
+
+- **`install-bats` and `run-bats`**, plus Bats coverage for the shell scripts behind 22 actions
+  (118 tests) and the three workflows that run them.
+
+### Changed
+
+- **Push-triggered workflows now run only on `main`.** 60 of the 63 had no `branches:` filter, so
+  every push to a feature branch ran them and opening a PR from that branch ran the identical set
+  again -- feature work cost twice the runner time it needed. All 60 already carry a
+  `pull_request:` trigger, so branches stay gated by the PR trigger and `main` by the push
+  trigger, and nothing loses coverage.
+
+### Fixed
+
+- **`SwiftyLab/setup-swift` is pinned to an audited commit SHA.** `@latest` was the only floating
+  action reference left in the repository, and it is a real separately-maintained tag upstream --
+  a distinct tag object from `v1.14.0` -- so it moved on the upstream maintainer's schedule. Both
+  refs currently dereference to the same commit, so nothing about what runs changes; the pin only
+  stops the ref moving underneath us.
+- **The 65 `test-*` workflows no longer receive a write-scoped `GITHUB_TOKEN`.**
+  `default_workflow_permissions` is `write` at both org and repo level, and none of them declared
+  a `permissions:` block, so each ran with read/write credentials it never used. Every publishing
+  path they exercise is a dry-run. The seven remaining workflows without a block genuinely need
+  write scopes -- releases, Pages deploys, OIDC, issue and PR comments -- and are left for
+  individual audit.
+
 ## [1.14.2] - 2026-09-12
 
 ### Fixed
