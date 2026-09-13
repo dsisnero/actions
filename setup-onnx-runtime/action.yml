@@ -32,19 +32,31 @@ runs:
     - name: Prepare ONNX Runtime (Linux)
       if: runner.os == 'Linux'
       shell: bash
-      run: ${{ github.action_path }}/scripts/linux.sh "${{ inputs.ort-version }}" "${{ inputs.dest-dir }}" "${{ inputs.arch-id }}" "${{ inputs.strategy }}"
+      env:
+        ORT_VERSION: ${{ inputs.ort-version }}
+        ORT_DEST_DIR: ${{ inputs.dest-dir }}
+        ORT_ARCH_ID: ${{ inputs.arch-id }}
+        ORT_STRATEGY: ${{ inputs.strategy }}
+      run: ${{ github.action_path }}/scripts/linux.sh "$ORT_VERSION" "$ORT_DEST_DIR" "$ORT_ARCH_ID" "$ORT_STRATEGY"
 
     - name: Prepare ONNX Runtime (macOS)
       if: runner.os == 'macOS'
       shell: bash
-      run: ${{ github.action_path }}/scripts/macos.sh "${{ inputs.ort-version }}" "${{ inputs.dest-dir }}" "${{ inputs.arch-id }}" "${{ inputs.strategy }}"
+      env:
+        ORT_VERSION: ${{ inputs.ort-version }}
+        ORT_DEST_DIR: ${{ inputs.dest-dir }}
+        ORT_ARCH_ID: ${{ inputs.arch-id }}
+        ORT_STRATEGY: ${{ inputs.strategy }}
+      run: ${{ github.action_path }}/scripts/macos.sh "$ORT_VERSION" "$ORT_DEST_DIR" "$ORT_ARCH_ID" "$ORT_STRATEGY"
 
     - name: Prepare ONNX Runtime (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
+      env:
+        ORT_VERSION: ${{ inputs.ort-version }}
+        ORT_DEST_DIR: ${{ inputs.dest-dir }}
+        ORT_ARCH_ID: ${{ inputs.arch-id }}
+        ORT_STRATEGY: ${{ inputs.strategy }}
       run: >-
         & "${{ github.action_path }}/scripts/windows.ps1"
-        "${{ inputs.ort-version }}"
-        "${{ inputs.dest-dir }}"
-        "${{ inputs.arch-id }}"
-        "${{ inputs.strategy }}"
+        "$env:ORT_VERSION" "$env:ORT_DEST_DIR" "$env:ORT_ARCH_ID" "$env:ORT_STRATEGY"

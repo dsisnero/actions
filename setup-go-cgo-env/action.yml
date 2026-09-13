@@ -30,24 +30,31 @@ runs:
     - name: Setup Go cgo environment (Unix-like)
       if: runner.os != 'Windows'
       shell: bash
+      env:
+        FFI_LIB_DIR: ${{ inputs.ffi-lib-dir }}
+        FFI_ENABLE_RPATH: ${{ inputs.enable-rpath }}
+        FFI_CRATE_DIR: ${{ inputs.ffi-crate-dir }}
+        FFI_LIB_NAME: ${{ inputs.ffi-lib-name }}
       run: >-
         "${{ github.action_path }}/scripts/unix.sh"
-        "${{ inputs.ffi-lib-dir }}"
-        "${{ inputs.enable-rpath }}"
-        "${{ inputs.ffi-crate-dir }}"
-        "${{ inputs.ffi-lib-name }}"
+        "$FFI_LIB_DIR" "$FFI_ENABLE_RPATH" "$FFI_CRATE_DIR" "$FFI_LIB_NAME"
 
     - name: Setup Go cgo environment (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
+      env:
+        FFI_LIB_DIR: ${{ inputs.ffi-lib-dir }}
+        FFI_CRATE_DIR: ${{ inputs.ffi-crate-dir }}
+        FFI_LIB_NAME: ${{ inputs.ffi-lib-name }}
+        FFI_HEADER_PATH: ${{ inputs.ffi-header-path }}
       run: >-
         & "${{ github.action_path }}/scripts/windows.ps1"
-        "${{ inputs.ffi-lib-dir }}"
-        "${{ inputs.ffi-crate-dir }}"
-        "${{ inputs.ffi-lib-name }}"
-        "${{ inputs.ffi-header-path }}"
+        "$env:FFI_LIB_DIR" "$env:FFI_CRATE_DIR" "$env:FFI_LIB_NAME" "$env:FFI_HEADER_PATH"
 
     - name: Verify Go cgo configuration
       shell: bash
+      env:
+        FFI_LIB_DIR: ${{ inputs.ffi-lib-dir }}
+        FFI_LIB_NAME: ${{ inputs.ffi-lib-name }}
       run: |
-        "${{ github.action_path }}/scripts/verify.sh" "${{ inputs.ffi-lib-dir }}" "${{ inputs.ffi-lib-name }}"
+        "${{ github.action_path }}/scripts/verify.sh" "$FFI_LIB_DIR" "$FFI_LIB_NAME"

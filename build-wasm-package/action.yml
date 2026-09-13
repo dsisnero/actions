@@ -43,9 +43,11 @@ runs:
       if: inputs.pack-tarball == 'true'
       id: pack
       shell: bash
+      env:
+        CRATE_DIR: ${{ inputs.crate-dir }}
       run: |
         set -euo pipefail
-        pushd "${{ inputs.crate-dir }}" >/dev/null
+        pushd "${CRATE_DIR}" >/dev/null
         WASM_TGZ=$(npm pack | tail -1)
         mv "$WASM_TGZ" "$GITHUB_WORKSPACE/$WASM_TGZ"
         popd >/dev/null

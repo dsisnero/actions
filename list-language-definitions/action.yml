@@ -21,6 +21,17 @@ runs:
     - name: Get all language names
       id: list
       shell: bash
+      env:
+        DEFINITIONS_PATH: ${{ inputs.definitions-path }}
       run: |
-        LANGS=$(python3 -c "import json; d=json.load(open('${{ inputs.definitions-path }}')); print(','.join(sorted(d.keys())))")
+        # DEFINITIONS_PATH is passed as sys.argv[1], never interpolated into the Python
+        # source string itself, so its value cannot break out of both the bash "..."
+        # quoting and the Python string literal at once (the double-breakout surface
+        # this action previously had).
+        LANGS=$(python3 -c "
+        import json, sys
+        with open(sys.argv[1]) as f:
+            d = json.load(f)
+        print(','.join(sorted(d.keys())))
+        " "$DEFINITIONS_PATH")
         echo "names=$LANGS" >> "$GITHUB_OUTPUT"

@@ -109,16 +109,18 @@ runs:
     - name: Lint documentation prose
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        DOCS_STRICT: ${{ inputs.strict }}
       run: |
         set -euo pipefail
         if [ -x "$(command -v task)" ]; then
-          if [ "${{ inputs.strict }}" = "true" ]; then
+          if [ "$DOCS_STRICT" = "true" ]; then
             TEXTLINT_STRICT=1 task docs:lint:prose
           else
             task docs:lint:prose || true
           fi
         else
-          textlint docs/ 2>&1 || [ "${{ inputs.strict }}" = "false" ]
+          textlint docs/ 2>&1 || [ "$DOCS_STRICT" = "false" ]
         fi
 
     - name: Install alef CLI

@@ -48,5 +48,7 @@ runs:
     - name: Install R dependencies
       if: inputs.install-deps == 'true' && inputs.install-deps-script != ''
       shell: bash
+      env:
+        R_INSTALL_DEPS_SCRIPT: ${{ inputs.install-deps-script }}
       run: |
-        "${{ github.workspace }}/${{ inputs.install-deps-script }}"
+        "${{ github.workspace }}/$R_INSTALL_DEPS_SCRIPT"

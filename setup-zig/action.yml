@@ -14,11 +14,15 @@ runs:
     - name: Install Zig (Unix)
       if: runner.os != 'Windows'
       shell: bash
+      env:
+        ZIG_VERSION: ${{ inputs.version }}
       run: |
-        "${{ github.action_path }}/scripts/unix.sh" "${{ inputs.version }}"
+        "${{ github.action_path }}/scripts/unix.sh" "$ZIG_VERSION"
 
     - name: Install Zig (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
+      env:
+        ZIG_VERSION: ${{ inputs.version }}
       run: |
-        & '${{ github.action_path }}/scripts/windows.ps1' '${{ inputs.version }}'
+        & '${{ github.action_path }}/scripts/windows.ps1' "$env:ZIG_VERSION"

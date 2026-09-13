@@ -116,7 +116,13 @@ namespace_packages = true
 [tool.pytest]
 # Per-action tests/ directories are listed explicitly. They used to be invisible to CI, which is
 # how test_upload_artifacts kept asserting an exit code the script had stopped returning. ~keep
-ini_options.testpaths = ["tests", "check-r-package/tests", "publish-github-release/tests", "publish-r-package/tests"]
+ini_options.testpaths = [
+  "tests",
+  "check-r-package/tests",
+  "publish-github-release/tests",
+  "publish-homebrew-source-formulas/scripts",
+  "publish-r-package/tests",
+]
 ini_options.norecursedirs = ["dist", "build", "*.egg"]
 # Every tests/ dir carries an __init__.py, so under the default import mode they all resolve to
 # the same `tests` package and only the root one is importable. importlib mode keys modules by

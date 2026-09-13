@@ -24,13 +24,17 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        TASK_VERSION: ${{ inputs.version }}
+        TASK_INSTALL_DIR: ${{ inputs.install-dir }}
       run: |
-        "${{ github.action_path }}/scripts/unix.sh" "${{ inputs.version }}" "${{ inputs.install-dir }}"
+        "${{ github.action_path }}/scripts/unix.sh" "$TASK_VERSION" "$TASK_INSTALL_DIR"
 
     - name: Setup Task (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        TASK_VERSION: ${{ inputs.version }}
+        TASK_INSTALL_DIR: ${{ inputs.install-dir }}
       run: |
-        & '${{ github.action_path }}/scripts/windows.ps1' '${{ inputs.version }}' '${{ inputs.install-dir }}'
+        & '${{ github.action_path }}/scripts/windows.ps1' "$env:TASK_VERSION" "$env:TASK_INSTALL_DIR"

@@ -32,32 +32,108 @@ runs:
     - name: Build CLI binary
       id: build
       shell: bash
+      env:
+        RUST_PACKAGE_NAME: ${{ inputs.package-name }}
+        RUST_BINARY_NAME: ${{ inputs.binary-name }}
+        RUST_TARGET: ${{ inputs.target }}
+        RUST_GLIBC_VERSION: ${{ inputs.glibc-version }}
+        RUST_EXTRA_CARGO_ARGS: ${{ inputs.extra-cargo-args }}
       run: |
         set -euo pipefail
-        TARGET_FLAG=""
         TARGET_DIR="target/release"
-        if [[ -n "${{ inputs.target }}" ]]; then
+        declare -a CARGO_CMD=(cargo build)
+        declare -a TARGET_FLAG=()
+        if [[ -n "$RUST_TARGET" ]]; then
           # Use zigbuild for linux-gnu targets with glibc floor lowering
-          if [[ "${{ inputs.target }}" == *"-linux-gnu" ]] && [[ -n "${{ inputs.glibc-version }}" ]]; then
-            CARGO_CMD="cargo zigbuild"
-            GLIBC_SUFFIXED_TARGET="${{ inputs.target }}.${{ inputs.glibc-version }}"
-            TARGET_FLAG="--target ${GLIBC_SUFFIXED_TARGET}"
+          if [[ "$RUST_TARGET" == *"-linux-gnu" ]] && [[ -n "$RUST_GLIBC_VERSION" ]]; then
+            CARGO_CMD=(cargo zigbuild)
+            GLIBC_SUFFIXED_TARGET="${RUST_TARGET}.${RUST_GLIBC_VERSION}"
+            TARGET_FLAG=(--target "$GLIBC_SUFFIXED_TARGET")
             # Artifacts are emitted to target/<base-triple>/release, not target/<base-triple>.glibc/release
-            TARGET_DIR="target/${{ inputs.target }}/release"
-            echo "[build-rust-cli] glibc floor: ${{ inputs.glibc-version }} (target: ${GLIBC_SUFFIXED_TARGET})"
+            TARGET_DIR="target/${RUST_TARGET}/release"
+            echo "[build-rust-cli] glibc floor: ${RUST_GLIBC_VERSION} (target: ${GLIBC_SUFFIXED_TARGET})"
           else
-            CARGO_CMD="cargo build"
-            TARGET_FLAG="--target ${{ inputs.target }}"
-            TARGET_DIR="target/${{ inputs.target }}/release"
+            TARGET_FLAG=(--target "$RUST_TARGET")
+            TARGET_DIR="target/${RUST_TARGET}/release"
           fi
-        else
-          CARGO_CMD="cargo build"
         fi
 
-        ${CARGO_CMD} --locked --release --package "${{ inputs.package-name }}" $TARGET_FLAG ${{ inputs.extra-cargo-args }}
+        # extra-cargo-args is documented as "additional arguments" (plural): a
+        # space-separated (or multi-line) list of flags, e.g. "--features foo bar" or
+        # "--features foo\n--no-default-features", not a single opaque token, so
+        # blanket-quoting it as one word would change its contract.
+        #
+        # `read -ra <<< "$VAR"` was tried first and rejected: it only performs IFS
+        # word-splitting on the first line, silently dropping every subsequent line, and
+        # it does not honor quotes, so `--features "foo bar"` splits into the two
+        # tokens `"foo` and `bar"` (literal quote characters) instead of one `foo bar`
+        # token. Silent data loss on legitimate multi-line/quoted input is worse than
+        # the injection it was meant to fix.
+        #
+        # xargs -n1 does honor shell-style quoting and processes every line, so it is
+        # used to split the value into one argv entry per line instead: it never
+        # re-executes the value (no `eval`, no re-parsing for `;`, `$()`, backticks,
+        # `|`, `&&` as shell syntax — those become literal characters inside a token),
+        # so a hostile value becomes at worst extra literal argv tokens handed to cargo,
+        # never a second command.
+        #
+        # Three-way constraint on top of that, all measured directly against this xargs
+        # (BSD and observed-consistent with GNU findutils):
+        #   1. whitespace-only input -> zero argv entries
+        #   2. an explicitly quoted empty argument (e.g. `--config ""`) -> preserved, in
+        #      its original position
+        #   3. hostile metacharacters -> inert literal argv tokens, never a second command
+        # (1) and (3) were handled first by guarding on the split result being non-empty,
+        # but that guard also silently dropped (2): xargs -n1 drops a wholly-empty
+        # TRAILING token (verified with `xargs -n1 printf '%s\n' | od -c`: a lone
+        # trailing `""` never leaves xargs at all) while preserving a leading or middle
+        # empty token, so `--config ""` lost its empty and `--a "" --b ""` kept the first
+        # empty but dropped the second. A non-empty sentinel is appended to the value
+        # before it reaches xargs, which guarantees the value's own true last token is
+        # never itself the trailing one (the sentinel is), so xargs cannot drop it; the
+        # sentinel is then popped off the end of the parsed array. This single mechanism
+        # satisfies all three constraints at once: a whitespace-only value collapses to
+        # just the sentinel, which pops to zero entries; a trailing quoted empty is no
+        # longer trailing when the sentinel follows it, so it survives; and every
+        # injection property of the xargs-based split is unchanged, since the sentinel is
+        # plain text with no shell metacharacters of its own.
+        #
+        # Two further deliberate, tested trade-offs:
+        # - An unbalanced quote makes xargs exit non-zero ("unterminated quote") even with
+        #   the sentinel appended (the still-open quote absorbs it); that is caught
+        #   explicitly below and fails the step loudly rather than silently truncating the
+        #   value, which is the right failure mode for malformed input.
+        # - xargs also treats a backslash as a quoting escape, so a legitimate value
+        #   containing a literal backslash (e.g. `foo\bar`) is collapsed to `foobar`.
+        #   Cargo flags/feature names do not need literal backslashes in practice; a
+        #   caller who does needs a different mechanism, not this input. ~keep
+        declare -a EXTRA_ARGS=()
+        if [[ -n "$RUST_EXTRA_CARGO_ARGS" ]]; then
+          extra_cargo_args_sentinel="__xberg_actions_build_rust_cli_end_of_args__"
+          extra_cargo_args_split="$(printf '%s %s' "$RUST_EXTRA_CARGO_ARGS" "$extra_cargo_args_sentinel" | xargs -n1 printf '%s\n')" || {
+            echo "::error::extra-cargo-args could not be parsed as shell-style arguments (unbalanced quote?)" >&2
+            exit 1
+          }
+          declare -a extra_cargo_args_raw=()
+          while IFS= read -r extra_cargo_arg; do
+            extra_cargo_args_raw+=("$extra_cargo_arg")
+          done <<< "$extra_cargo_args_split"
+          # The sentinel is always the last element here: it is a single non-empty token
+          # appended after everything else, and a non-empty trailing token is never
+          # dropped by xargs (only a wholly-empty one is). Drop it before use.
+          if [[ ${#extra_cargo_args_raw[@]} -gt 0 ]]; then
+            # Explicit last-index arithmetic instead of bash 4.3+'s negative-index
+            # `array[-1]` syntax, since GitHub-hosted macOS runners' default /bin/bash is
+            # 3.2 (Apple ships no newer GPLv3 bash), which does not support it.
+            unset "extra_cargo_args_raw[${#extra_cargo_args_raw[@]}-1]"
+          fi
+          EXTRA_ARGS=("${extra_cargo_args_raw[@]}")
+        fi
+
+        "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"
 
         if [[ "$RUNNER_OS" == "Windows" ]]; then
-          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${{ inputs.binary-name }}.exe" >> "$GITHUB_OUTPUT"
+          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${RUST_BINARY_NAME}.exe" >> "$GITHUB_OUTPUT"
         else
-          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${{ inputs.binary-name }}" >> "$GITHUB_OUTPUT"
+          echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${RUST_BINARY_NAME}" >> "$GITHUB_OUTPUT"
         fi

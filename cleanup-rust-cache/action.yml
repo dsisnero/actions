@@ -14,22 +14,68 @@ runs:
   steps:
     - name: Cleanup build artifacts
       shell: bash
+      env:
+        LARGE_ARTIFACT_PATTERNS: ${{ inputs.large-artifact-patterns }}
+        MAX_LIB_SIZE: ${{ inputs.max-lib-size }}
       run: |
-        # Remove additional large artifacts specified by consumer
-        if [ -n "${{ inputs.large-artifact-patterns }}" ]; then
-          echo "${{ inputs.large-artifact-patterns }}" | while IFS= read -r pattern; do
-            if [ -n "$pattern" ]; then
-              rm -rf $pattern 2>/dev/null || true
-              echo "Removed: $pattern"
-            fi
-          done
+        # Remove additional large artifacts specified by consumer. Each line is an
+        # unquoted glob pattern by contract (e.g. "*.o", "sub/*.rlib"), matched
+        # *relative to target/* — never treated as a literal path and never allowed to
+        # resolve outside target/. An earlier version ran `rm -rf $pattern` at the repo
+        # root: a pattern of "--no-preserve-root /" became argv to `rm -rf`, an
+        # arbitrary-deletion primitive. A later version rejected patterns by TEXT (leading
+        # '-', leading '/', '..') and only expanded the glob from inside target/ — that
+        # still escaped: `cd target` does not confine anything once a *child of target* is
+        # a symlink to somewhere else (e.g. `target/escape -> /elsewhere`), because a
+        # pattern like `escape/*.o` is perfectly ordinary relative text and matches files
+        # through the symlink. Text-level checks can never catch this, because the escape
+        # lives in the filesystem, not in the pattern string.
+        #
+        # Containment is now checked on the RESOLVED path, not the pattern: after `cd
+        # target`, `pwd -P` gives target's own canonical (symlink-resolved) location, and
+        # each glob match is independently resolved with `realpath` before deletion. Only a
+        # match whose resolved path is target's canonical directory itself, or falls under
+        # it, is removed; anything a symlinked path component walks outside of is skipped
+        # and reported, never deleted. This intentionally also refuses to remove a symlink
+        # *node* that itself points outside target/ (only the pointed-to location is
+        # checked) — the safe direction to be conservative in. Text-level rejection of
+        # flag-injection ('-'-prefixed), absolute, and '..'-traversal patterns is kept as
+        # cheap defense-in-depth ahead of the realpath check. ~keep
+        if [ -n "$LARGE_ARTIFACT_PATTERNS" ]; then
+          while IFS= read -r pattern; do
+            [ -z "$pattern" ] && continue
+            case "$pattern" in
+              -*|/*|*..*)
+                echo "::error::skipping unsafe large-artifact-patterns entry: $pattern" >&2
+                continue
+                ;;
+            esac
+            (
+              cd target 2>/dev/null || exit 0
+              target_root="$(pwd -P)"
+              shopt -s nullglob
+              # shellcheck disable=SC2086  # intentional glob expansion of a validated pattern
+              for match in $pattern; do
+                match_resolved="$(realpath -- "$match" 2>/dev/null)" || continue
+                case "$match_resolved" in
+                  "$target_root"/* | "$target_root")
+                    rm -rf -- "$match"
+                    echo "Removed: target/$match"
+                    ;;
+                  *)
+                    echo "::error::skipping large-artifact-patterns match that resolves outside target/ (symlinked path component?): $match -> $match_resolved" >&2
+                    ;;
+                esac
+              done
+            )
+          done <<< "$LARGE_ARTIFACT_PATTERNS"
         fi
 
         # Remove large compiled libraries
-        find target -type f -name "*.rlib" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.so" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.dylib" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
-        find target -type f -name "*.dll" -size ${{ inputs.max-lib-size }} -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.rlib" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.so" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.dylib" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
+        find target -type f -name "*.dll" -size "$MAX_LIB_SIZE" -exec rm -f {} \; 2>/dev/null || true
 
         # Remove incremental compilation cache
         rm -rf target/*/incremental 2>/dev/null || true

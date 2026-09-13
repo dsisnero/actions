@@ -4,6 +4,102 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-09-13
+
+### Security
+
+- `reusable-validate.yml`'s `golangci-lint` installer now fetches `install.sh` pinned to an
+  audited upstream commit SHA instead of the `golangci-lint-version` tag: that tag is a
+  lightweight (unsigned) ref that anyone with push access upstream can force-move, so the prior
+  "immutable version tag" comment overstated the guarantee. The caller-supplied
+  `golangci-lint-version` is now passed through `env:` instead of being interpolated into `run:`,
+  matching the existing `python-extra-projects` pattern, and is validated against a semver shape
+  before use.
+- ~20 composite actions (`build-and-cache-binding`, `build-docs`, `build-node-napi`,
+  `build-python-wheels`, `build-ruby-gem`, `build-wasm-package`, `cache-binding-artifact`,
+  `cleanup-rust-cache`, `ensure-gh`, `install-alef`, `install-task`, `lint-docs`, `publish-pypi`,
+  `setup-go-cgo-env`, `setup-maven`, `setup-node-workspace`, `setup-onnx-runtime`,
+  `setup-python-env`, `setup-r`, `setup-rust`, `setup-tesseract-cache`, `setup-zig`,
+  `test-java-ffi`, `verify-ai-rulez-plugin`) now route every caller-supplied data input through
+  `env:` instead of splicing `${{ inputs.* }}` directly into `run:`, closing the same
+  script-injection surface as the golangci-lint fix above. Documented "run this command"
+  contracts (`build-command`, `install-command`, `pre-run-command`) are left as direct splices —
+  that is their intended arbitrary-command contract, not a defect.
+- `list-language-definitions`'s `definitions-path` had a double quote-breakout surface: it sat
+  inside both a bash `"..."` argument and an embedded Python string literal, so closing only one
+  layer would have left it exploitable. The path is now passed as `sys.argv[1]` rather than
+  interpolated into the Python source string, closing both layers at once.
+- `reusable-cli-release.yml`'s build jobs (`cli-binaries`, `cli-binaries-extra`,
+  `cli-binaries-musl`), `reusable-binstall-verify.yml`, and `reusable-check-registries.yml` now
+  declare explicit least-privilege `permissions: contents: read` instead of inheriting whatever
+  default `GITHUB_TOKEN` scope the caller repo or org has configured.
+- `build-rust-cli`'s `extra-cargo-args` handling changed twice: the first fix (`read -ra`)
+  regressed correctness — it silently dropped every line but the first of a multi-line value and
+  did not honor quoting, so `--features "foo bar"` split into the two literal tokens `"foo` and
+  `bar"`. It now uses `xargs -n1` to split the value, which honors quoting and processes every
+  line, while still never re-executing the value as shell (metacharacters land as literal argv
+  text). An unbalanced quote now fails the step loudly instead of silently truncating the value;
+  a literal backslash in the value is treated as an escape by `xargs` and collapsed, a documented,
+  accepted trade-off.
+- `cleanup-rust-cache`'s `large-artifact-patterns` handling ran `rm -rf $pattern` against each
+  caller-supplied line unquoted and unconstrained: a pattern of `--no-preserve-root /` became
+  argv to `rm -rf`, an arbitrary-deletion primitive that (independently reproduced during this
+  fix) attempted to delete `/etc/passwd` outside a sandboxed test. Patterns starting with `-`
+  (would misparse as an `rm` flag), `/` (absolute), or containing `..` (traversal) are now
+  rejected outright before any deletion is attempted.
+- `cleanup-rust-cache`'s prior text-level rejection above (leading `-`, `/`, `..`) and expanding
+  the glob from inside `target/` did not actually confine deletion to `target/`, despite an
+  earlier changelog entry here claiming it did: `cd target` provides no containment once a child
+  of `target/` is a symlink to somewhere else (e.g. `target/escape -> /elsewhere`), because a
+  pattern like `escape/*.o` is ordinary relative text that matches straight through the symlink.
+  Confinement is now checked on the *resolved* path, not the pattern text: `target`'s own
+  canonical (symlink-resolved) directory is compared against each glob match's own resolved path
+  via `realpath`, and only a match that resolves under `target/`'s real location is deleted —
+  reproduced against a real `target/escape -> outside/` symlink and a `victim.o` file placed
+  outside `target/`, which the fixed script now leaves untouched.
+- `build-docs`'s `docs-group` input was woven directly into a string that becomes another
+  action's `install-command`, itself later executed as shell. That downstream splice is an
+  intentional "run this command" contract for whoever authors `install-command`, but `docs-group`
+  is only ever supposed to be a uv dependency-group name, not shell text; a hostile value could
+  ride along inside the constructed command. It is now validated against `^[A-Za-z0-9_-]+$` and
+  the constructed command references the validated step output, not the raw input.
+- `build-python-wheels`'s `build-libheif` input was spliced directly into the multi-line
+  `CIBW_BEFORE_ALL_LINUX` env value, which is itself later executed as shell inside the manylinux
+  container by cibuildwheel. That splice happens at the GitHub Actions YAML-substitution layer
+  before the container even exists, so the container boundary provided no protection. It is now
+  validated as a strict `true`/`false` boolean, set as an ordinary env var, and forwarded into the
+  container unmodified via `CIBW_ENVIRONMENT_PASS_LINUX`; the script reads it as a real shell
+  variable evaluated only inside the container's own shell.
+- Added `tests/test_security_regressions.py`: committed, mutation-proven adversarial regression
+  tests for the golangci-lint, `list-language-definitions`, `build-rust-cli`, `cleanup-rust-cache`,
+  `build-docs`, and `build-python-wheels` fixes above. Each test extracts the real `run:` script
+  for its step directly from the action/workflow YAML (never a pasted copy) and asserts on argv
+  arrays or filesystem side effects, never on a rejoined string — the `build-rust-cli` tests in
+  particular assert exact argv counts, which is precisely the class of check that would have
+  caught the `read -ra` regression above before it shipped.
+- `build-rust-cli`'s `extra-cargo-args` handling had a residual defect after the `xargs` fix
+  above: a whitespace-only value (e.g. `"   "`) passed the `[[ -n "$VAR" ]]` non-empty check, but
+  `xargs -n1` emits nothing for it, and the subsequent `while read <<< ""` here-string still
+  yielded one empty line, so a stray empty-string argv entry reached cargo. The guard now checks
+  the *split result* for non-emptiness rather than the raw input, so a whitespace-only value now
+  contributes exactly zero argv entries, matching the empty-input case.
+- `build-rust-cli`'s whitespace-only-guard fix above traded one defect for another: it also
+  silently dropped a legitimate explicitly quoted empty argument (e.g. `--config ""`). Isolated
+  the mechanism directly (`printf '%s' '--config ""' | xargs -n1 printf '%s\n' | od -c` shows
+  only `--config\n` — the empty line for `""` never leaves xargs): xargs drops a wholly-empty
+  TRAILING token but preserves a leading or middle one, so `--a "" --b ""` kept its first empty
+  and lost its second. A non-empty sentinel is now appended to the value before it reaches xargs,
+  so the value's own true last token is never itself trailing, and the sentinel is popped from the
+  parsed array afterward. This single mechanism satisfies all three requirements at once:
+  whitespace-only collapses to zero entries, a trailing quoted empty survives in position, and
+  injected metacharacters remain inert literal tokens.
+
+### Fixed
+
+- `publish-homebrew-source-formulas/scripts/test_render.py` is now part of
+  `tool.pytest.ini_options.testpaths`, so its 8 tests are collected by the release gate instead of
+  silently skipped.
+
 ## [1.16.0] - 2026-09-13
 
 ### Added

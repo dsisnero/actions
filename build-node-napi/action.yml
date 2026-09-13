@@ -86,6 +86,8 @@ runs:
     - name: Install pnpm workspace deps
       if: inputs.install-deps == 'true'
       shell: bash
+      env:
+        CRATE_DIR: ${{ inputs.crate-dir }}
       run: |
         set -euo pipefail
         # --no-frozen-lockfile: pnpm defaults frozen-lockfile=true in CI, but the
@@ -93,7 +95,7 @@ runs:
         # unpublished release version and can never be recorded in pnpm-lock.yaml,
         # so a frozen install fails with ERR_PNPM_OUTDATED_LOCKFILE. The lockfile
         # is left unchanged (only the unrecordable optional deps differ).
-        pnpm install --no-frozen-lockfile --filter ./${{ inputs.crate-dir }}...
+        pnpm install --no-frozen-lockfile --filter "./${CRATE_DIR}..."
 
     - name: Build NAPI-RS bindings (default / legacy)
       if: inputs.target == ''
@@ -284,9 +286,11 @@ runs:
       if: inputs.pack-tarball == 'true'
       id: pack
       shell: bash
+      env:
+        CRATE_DIR: ${{ inputs.crate-dir }}
       run: |
         set -euo pipefail
-        pushd "${{ inputs.crate-dir }}" >/dev/null
+        pushd "${CRATE_DIR}" >/dev/null
         NODE_TGZ=$(npm pack | tail -1)
         mv "${NODE_TGZ}" "${GITHUB_WORKSPACE}/${NODE_TGZ}"
         popd >/dev/null

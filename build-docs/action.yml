@@ -30,18 +30,40 @@ runs:
     - name: Install Task
       uses: xberg-io/actions/install-task@v1
 
+    # docs-group is woven into a string that becomes another action's install-command,
+    # which is itself later executed as shell (setup-python-env's documented, intentional
+    # "run arbitrary command" contract). That downstream splice is fine for a value the
+    # *caller of that action* authored on purpose; it is not fine for docs-group, which is
+    # only ever supposed to be a uv dependency-group name. Validate it against that
+    # contract here, before it ever reaches a shell, so a hostile docs-group value fails
+    # loudly instead of riding along inside the constructed command. ~keep
+    - name: Validate docs-group
+      id: validate-docs-group
+      shell: bash
+      env:
+        DOCS_GROUP: ${{ inputs.docs-group }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$DOCS_GROUP" =~ ^[A-Za-z0-9_-]+$ ]]; then
+          echo "::error::docs-group must match ^[A-Za-z0-9_-]+\$ (a uv dependency-group name), got: $DOCS_GROUP" >&2
+          exit 1
+        fi
+        echo "docs-group=$DOCS_GROUP" >> "$GITHUB_OUTPUT"
+
     - name: Setup Python environment
       uses: xberg-io/actions/setup-python-env@v1
       with:
         python-version: ${{ inputs.python-version }}
-        install-command: "uv sync --all-extras --all-packages --group dev --group ${{ inputs.docs-group }} --no-install-project --no-install-workspace"
+        install-command: "uv sync --all-extras --all-packages --group dev --group ${{ steps.validate-docs-group.outputs.docs-group }} --no-install-project --no-install-workspace"
 
     - name: Build documentation
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        DOCS_STRICT: ${{ inputs.strict }}
       run: |
         set -euo pipefail
-        if [ "${{ inputs.strict }}" = "true" ]; then
+        if [ "$DOCS_STRICT" = "true" ]; then
           if [ -x "$(command -v task)" ]; then
             task docs:build:strict
           else

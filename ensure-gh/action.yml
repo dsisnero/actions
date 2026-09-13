@@ -19,13 +19,15 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        GH_CLI_VERSION: ${{ inputs.version }}
       run: |
-        "${{ github.action_path }}/scripts/unix.sh" "${{ inputs.version }}"
+        "${{ github.action_path }}/scripts/unix.sh" "$GH_CLI_VERSION"
 
     - name: Ensure gh (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        GH_CLI_VERSION: ${{ inputs.version }}
       run: |
-        & '${{ github.action_path }}/scripts/windows.ps1' '${{ inputs.version }}'
+        & '${{ github.action_path }}/scripts/windows.ps1' "$env:GH_CLI_VERSION"
