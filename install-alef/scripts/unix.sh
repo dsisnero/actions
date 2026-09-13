@@ -61,7 +61,7 @@ install_from_release() {
 	while [[ $attempt -le $max_attempts ]]; do
 		echo "Installing alef v${version} for ${target} (attempt ${attempt}/${max_attempts})..."
 
-		if curl --location "${auth_args[@]}" \
+		if curl --location ${auth_args[@]+"${auth_args[@]}"} \
 			--connect-timeout 10 \
 			--max-time 60 \
 			--retry 2 \

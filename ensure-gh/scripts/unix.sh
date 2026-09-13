@@ -53,7 +53,7 @@ resolve_version() {
 	if [[ -n "${GITHUB_TOKEN:-}" ]]; then
 		auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
 	fi
-	tag="$(curl --silent --fail "${auth_args[@]}" \
+	tag="$(curl --silent --fail ${auth_args[@]+"${auth_args[@]}"} \
 		"https://api.github.com/repos/cli/cli/releases/latest" |
 		grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')"
 	if [[ -z "$tag" ]]; then

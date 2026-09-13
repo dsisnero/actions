@@ -68,7 +68,7 @@ install_ref=""
 if [[ "$version" == "main" ]]; then
 	install_ref="main"
 	set +e +o pipefail
-	sha="$(curl --silent --fail "${auth_args[@]}" \
+	sha="$(curl --silent --fail ${auth_args[@]+"${auth_args[@]}"} \
 		"https://api.github.com/repos/xberg-io/alef/commits/main" |
 		grep -m1 '"sha"' | sed -E 's/.*"([0-9a-f]+)".*/\1/')"
 	set -eo pipefail
@@ -84,7 +84,7 @@ else
 			resolved_version="$pinned"
 		else
 			set +e +o pipefail
-			tag="$(curl --silent --fail "${auth_args[@]}" \
+			tag="$(curl --silent --fail ${auth_args[@]+"${auth_args[@]}"} \
 				"https://api.github.com/repos/xberg-io/alef/releases/latest" |
 				grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')"
 			set -eo pipefail

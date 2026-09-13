@@ -127,10 +127,15 @@ runs:
             # 3.2 (Apple ships no newer GPLv3 bash), which does not support it.
             unset "extra_cargo_args_raw[${#extra_cargo_args_raw[@]}-1]"
           fi
-          EXTRA_ARGS=("${extra_cargo_args_raw[@]}")
+          # Same bash 3.2 constraint as the negative-index note above: `"${arr[@]}"` on an
+          # empty array is an unbound-variable error under `set -u` before bash 4.4, and
+          # dropping the sentinel from a single-token value empties this one. ~keep
+          EXTRA_ARGS=(${extra_cargo_args_raw[@]+"${extra_cargo_args_raw[@]}"})
         fi
 
-        "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" "${TARGET_FLAG[@]}" "${EXTRA_ARGS[@]}"
+        # TARGET_FLAG is empty for a host build and EXTRA_ARGS whenever extra-cargo-args is
+        # unset, so both need the same guard; CARGO_CMD always holds at least `cargo`. ~keep
+        "${CARGO_CMD[@]}" --locked --release --package "$RUST_PACKAGE_NAME" ${TARGET_FLAG[@]+"${TARGET_FLAG[@]}"} ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
 
         if [[ "$RUNNER_OS" == "Windows" ]]; then
           echo "binary-path=$GITHUB_WORKSPACE/${TARGET_DIR}/${RUST_BINARY_NAME}.exe" >> "$GITHUB_OUTPUT"

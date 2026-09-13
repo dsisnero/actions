@@ -23,7 +23,7 @@ resolve_latest_version() {
 		--max-time 30 \
 		-H "X-GitHub-Api-Version: 2022-11-28" \
 		-H "Accept: application/vnd.github+json" \
-		"${auth_args[@]}" \
+		${auth_args[@]+"${auth_args[@]}"} \
 		"$api_url" |
 		grep -oE '"tag_name":[[:space:]]*"[^"]+"' |
 		head -1 |
@@ -162,7 +162,7 @@ install_from_github_release() {
 		--max-time 60 \
 		--retry 2 \
 		--retry-delay 3 \
-		"${auth_args[@]}" \
+		${auth_args[@]+"${auth_args[@]}"} \
 		"$download_url" \
 		--output "$temp_tar"; then
 

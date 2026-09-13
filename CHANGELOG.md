@@ -41,6 +41,15 @@ All notable changes to xberg-io/actions are documented in this file.
   containing a traversal link. Entries are now typed individually and each link target is
   resolved against the archive root, so in-tree links and hard links are accepted while
   `../`-escaping and absolute targets are refused.
+- `build-rust-cli` failed on every macOS runner whenever `extra-cargo-args` was unset or
+  resolved to a single token, and on any host build, for the same reason: `"${TARGET_FLAG[@]}"`,
+  `"${EXTRA_ARGS[@]}"` and `"${extra_cargo_args_raw[@]}"` are unbound-variable errors on an empty
+  array under `set -u` before bash 4.4. The surrounding code already accounted for bash 3.2 in
+  one respect — it avoids the 4.3+ negative-index syntax — but not this one. Found by the new
+  macOS pytest leg on its first run.
+- `ensure-gh`, `install-alef` and `install-task` had the same defect in their `unix.sh`
+  download paths: `auth_args` is empty whenever `GITHUB_TOKEN` is unset, so those actions
+  aborted on macOS runners without a token.
 - `run-bats` and `install-bats` failed under `set -u` on bash before 4.4 — `/bin/bash` on every
   macOS runner — because `"${arr[@]}"` on an empty array is treated as unbound. `run-bats` hit
   this with its default empty `args`.
