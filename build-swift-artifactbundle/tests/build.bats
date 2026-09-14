@@ -48,3 +48,46 @@ stub() {
 	expected=$(printf 'bundle-path=%s/dist/Kit.artifactbundle\nbundle-zip=%s/dist/Kit.artifactbundle.zip\nchecksum=checksum123' "$ROOT" "$ROOT")
 	[ "$(cat "$GITHUB_OUTPUT")" = "$expected" ]
 }
+
+@test "should_build_only_the_requested_targets_and_stage_them_without_assembling" {
+	stub rustup 'exit 0'
+	stub cargo 'if [ "$1" = build ] || [ "$1" = zigbuild ]; then target="${@: -1}"; mkdir -p "$CARGO_TARGET_DIR/$target/release"; touch "$CARGO_TARGET_DIR/$target/release/libmy_lib.a"; fi'
+	stub zig 'exit 0'
+	stub cargo-zigbuild 'target="${@: -1}"; mkdir -p "$CARGO_TARGET_DIR/$target/release"; touch "$CARGO_TARGET_DIR/$target/release/libmy_lib.a"'
+	stub df 'printf "fixture 100 1 99 1%% /tmp\n"'
+	export INPUT_CRATE_NAME=my-crate INPUT_LIB_NAME=my_lib INPUT_ARTIFACT_NAME=Kit INPUT_OUTPUT_DIR="$ROOT/dist" INPUT_TARGETS=aarch64-apple-darwin
+	run bash "$SCRIPT"
+	[ "$status" -eq 0 ]
+	# the requested triple is staged
+	[ -f "$ROOT/dist/libs/aarch64-apple-darwin/libmy_lib.a" ]
+	# and nothing else was built
+	[ ! -d "$CARGO_TARGET_DIR/aarch64-unknown-linux-gnu" ]
+	# and no bundle was assembled -- assembling here would be wrong, the other
+	# triples do not exist in this job
+	[ ! -d "$ROOT/dist/Kit.artifactbundle" ]
+	[[ "$output" == *"Build-only mode complete for: aarch64-apple-darwin"* ]]
+	[ "$(cat "$GITHUB_OUTPUT")" = "libs-dir=$ROOT/dist/libs" ]
+}
+
+@test "should_assemble_from_prebuilt_libraries_without_invoking_cargo" {
+	stub rustup 'exit 0'
+	# A cargo invocation in assemble mode is the defect this guards: fail loudly.
+	stub cargo 'echo "cargo must not run in assemble mode: $*" >&2; exit 97'
+	stub cargo-zigbuild 'echo "zigbuild must not run in assemble mode" >&2; exit 97'
+	stub zig 'exit 0'
+	stub df 'printf "fixture 100 1 99 1%% /tmp\n"'
+	stub zip 'touch "$2"'
+	stub swift 'echo checksum456'
+	prebuilt="$ROOT/prebuilt"
+	for triple in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
+		mkdir -p "$prebuilt/$triple"
+		touch "$prebuilt/$triple/libmy_lib.a"
+	done
+	export INPUT_CRATE_NAME=my-crate INPUT_LIB_NAME=my_lib INPUT_ARTIFACT_NAME=Kit INPUT_BINARY_TARGET_NAME=KitTarget INPUT_OUTPUT_DIR="$ROOT/dist" INPUT_INCLUDE_MACOS_X86_64=false INPUT_INCLUDE_IOS_X86_64=false INPUT_PREBUILT_LIBS_DIR="$prebuilt"
+	run bash "$SCRIPT"
+	[ "$status" -eq 0 ]
+	[ -f "$ROOT/dist/Kit.artifactbundle/Kit-macos-arm64/libmy_lib.a" ]
+	[ -f "$ROOT/dist/Kit.artifactbundle/Kit-linux-aarch64/libmy_lib.a" ]
+	[ "$(grep -o 'supportedTriples' "$ROOT/dist/Kit.artifactbundle/info.json" | wc -l)" -eq 5 ]
+	[[ "$output" != *"must not run in assemble mode"* ]]
+}

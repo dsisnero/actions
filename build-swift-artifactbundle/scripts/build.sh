@@ -13,6 +13,12 @@ INCLUDE_IOS_X86_64="${INPUT_INCLUDE_IOS_X86_64:-true}"
 # shellcheck disable=SC2034
 PACKAGE_MANIFEST_PATH="${INPUT_PACKAGE_MANIFEST_PATH:-}"
 DRY_RUN="${INPUT_DRY_RUN:-false}"
+# Split-build support. Six targets on one runner overflow the macOS runner disk (see
+# prune_target_intermediates below), so the monolithic build had to discard each target's
+# cache to fit. Building one triple per job removes both the disk ceiling and the serial
+# wall-clock, and keeps the warm cache. ~keep
+TARGETS="${INPUT_TARGETS:-}"
+PREBUILT_LIBS_DIR="${INPUT_PREBUILT_LIBS_DIR:-}"
 
 if [[ -z "$LIB_NAME" ]]; then
 	LIB_NAME="${CRATE_NAME//-/_}"
@@ -91,8 +97,13 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 bundle_dir="$OUTPUT_DIR/$ARTIFACT_NAME.artifactbundle"
-rm -rf "$bundle_dir"
-mkdir -p "$bundle_dir"
+# Only materialise the bundle directory on a path that will actually assemble one.
+# A build-only job that left an empty `.artifactbundle` behind would publish something
+# indistinguishable from a real bundle to anything globbing for it. ~keep
+if [[ -z "$TARGETS" || -n "$PREBUILT_LIBS_DIR" ]]; then
+	rm -rf "$bundle_dir"
+	mkdir -p "$bundle_dir"
+fi
 
 case "$BUILD_PROFILE" in
 release)
@@ -124,6 +135,34 @@ prune_target_intermediates() {
 	df -h "$target_dir" | tail -1
 }
 
+# The full target set, in the order the bundle expects them. `should_build` narrows it when
+# the caller asked for a subset (one job per triple); with TARGETS empty every triple is
+# built, which is the original single-job behaviour. ~keep
+ALL_TARGETS="aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu"
+
+should_build() {
+	local triple="$1"
+	[[ -n "$PREBUILT_LIBS_DIR" ]] && return 1
+	[[ -z "$TARGETS" ]] && return 0
+	local wanted
+	for wanted in ${TARGETS//,/ }; do
+		[[ "$wanted" == "$triple" ]] && return 0
+	done
+	return 1
+}
+
+# Where a finished static library lives. In assemble mode the libraries were produced by
+# other jobs and downloaded, so they come from a staging directory instead of the cargo
+# target tree. Every copy below goes through this, so the two modes cannot drift. ~keep
+lib_for() {
+	local triple="$1"
+	if [[ -n "$PREBUILT_LIBS_DIR" ]]; then
+		echo "$PREBUILT_LIBS_DIR/$triple/lib${LIB_NAME}.a"
+	else
+		echo "$target_dir/$triple/$target_subdir/lib${LIB_NAME}.a"
+	fi
+}
+
 # `df` exits non-zero on a path that does not exist, and under `set -euo pipefail` that
 # aborts the job before a single target is built. The target directory is created by the
 # first cargo invocation, so it is absent here whenever no cache restored it. A disk-space
@@ -133,12 +172,14 @@ echo "=== Disk space before building ==="
 df -h "$target_dir" | tail -1
 
 echo "=== Building Apple targets ==="
-echo "Building aarch64-apple-darwin..."
-# shellcheck disable=SC2086
-cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-darwin
-prune_target_intermediates aarch64-apple-darwin
+if should_build aarch64-apple-darwin; then
+	echo "Building aarch64-apple-darwin..."
+	# shellcheck disable=SC2086
+	cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-darwin
+	prune_target_intermediates aarch64-apple-darwin
+fi
 
-if [[ "$INCLUDE_MACOS_X86_64" == "true" ]]; then
+if [[ "$INCLUDE_MACOS_X86_64" == "true" ]] && should_build x86_64-apple-darwin; then
 	echo "Building x86_64-apple-darwin..."
 	# shellcheck disable=SC2086
 	cargo build --locked -p "$CRATE_NAME" $profile_flag --target x86_64-apple-darwin
@@ -147,17 +188,21 @@ else
 	echo "Skipping x86_64-apple-darwin (include-macos-x86_64=false)"
 fi
 
-echo "Building aarch64-apple-ios..."
-# shellcheck disable=SC2086
-cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-ios
-prune_target_intermediates aarch64-apple-ios
+if should_build aarch64-apple-ios; then
+	echo "Building aarch64-apple-ios..."
+	# shellcheck disable=SC2086
+	cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-ios
+	prune_target_intermediates aarch64-apple-ios
+fi
 
-echo "Building aarch64-apple-ios-sim..."
-# shellcheck disable=SC2086
-cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-ios-sim
-prune_target_intermediates aarch64-apple-ios-sim
+if should_build aarch64-apple-ios-sim; then
+	echo "Building aarch64-apple-ios-sim..."
+	# shellcheck disable=SC2086
+	cargo build --locked -p "$CRATE_NAME" $profile_flag --target aarch64-apple-ios-sim
+	prune_target_intermediates aarch64-apple-ios-sim
+fi
 
-if [[ "$INCLUDE_IOS_X86_64" == "true" ]]; then
+if [[ "$INCLUDE_IOS_X86_64" == "true" ]] && should_build x86_64-apple-ios; then
 	echo "Building x86_64-apple-ios..."
 	# shellcheck disable=SC2086
 	cargo build --locked -p "$CRATE_NAME" $profile_flag --target x86_64-apple-ios
@@ -168,14 +213,40 @@ fi
 
 echo "=== Building Linux targets (cargo-zigbuild) ==="
 
-echo "Building aarch64-unknown-linux-gnu..."
-# shellcheck disable=SC2086
-cargo zigbuild --locked -p "$CRATE_NAME" $profile_flag --target aarch64-unknown-linux-gnu
-prune_target_intermediates aarch64-unknown-linux-gnu
-echo "Building x86_64-unknown-linux-gnu..."
-# shellcheck disable=SC2086
-cargo zigbuild --locked -p "$CRATE_NAME" $profile_flag --target x86_64-unknown-linux-gnu
-prune_target_intermediates x86_64-unknown-linux-gnu
+if should_build aarch64-unknown-linux-gnu; then
+	echo "Building aarch64-unknown-linux-gnu..."
+	# shellcheck disable=SC2086
+	cargo zigbuild --locked -p "$CRATE_NAME" $profile_flag --target aarch64-unknown-linux-gnu
+	prune_target_intermediates aarch64-unknown-linux-gnu
+fi
+if should_build x86_64-unknown-linux-gnu; then
+	echo "Building x86_64-unknown-linux-gnu..."
+	# shellcheck disable=SC2086
+	cargo zigbuild --locked -p "$CRATE_NAME" $profile_flag --target x86_64-unknown-linux-gnu
+	prune_target_intermediates x86_64-unknown-linux-gnu
+fi
+# Build-only mode: the caller asked for a subset of triples, so this job's job is done.
+# Stage each library under a flat <triple>/ layout and stop -- a later assemble job
+# downloads every job's staging directory and passes it as prebuilt-libs-dir. Assembling
+# here would be wrong: the other triples do not exist in this job. ~keep
+if [[ -n "$TARGETS" && -z "$PREBUILT_LIBS_DIR" ]]; then
+	libs_dir="$OUTPUT_DIR/libs"
+	rm -rf "$libs_dir"
+	for triple in ${TARGETS//,/ }; do
+		built="$target_dir/$triple/$target_subdir/lib${LIB_NAME}.a"
+		if [[ ! -f "$built" ]]; then
+			echo "error: $triple produced no lib${LIB_NAME}.a at $built" >&2
+			exit 1
+		fi
+		mkdir -p "$libs_dir/$triple"
+		cp "$built" "$libs_dir/$triple/lib${LIB_NAME}.a"
+		echo "staged $triple -> $libs_dir/$triple/lib${LIB_NAME}.a"
+	done
+	echo "libs-dir=$libs_dir" >>"$GITHUB_OUTPUT"
+	echo "Build-only mode complete for: $TARGETS"
+	exit 0
+fi
+
 echo "=== Creating artifact bundle structure ==="
 mkdir -p "$bundle_dir/$ARTIFACT_NAME-macos-arm64"
 if [[ "$INCLUDE_MACOS_X86_64" == "true" ]]; then
@@ -187,21 +258,21 @@ mkdir -p "$bundle_dir/$ARTIFACT_NAME-linux-x86_64"
 mkdir -p "$bundle_dir/$ARTIFACT_NAME-linux-aarch64"
 
 echo "=== Copying static libraries ==="
-cp "$target_dir/aarch64-apple-darwin/$target_subdir/lib${LIB_NAME}.a" \
+cp "$(lib_for aarch64-apple-darwin)" \
 	"$bundle_dir/$ARTIFACT_NAME-macos-arm64/lib${LIB_NAME}.a"
 
 if [[ "$INCLUDE_MACOS_X86_64" == "true" ]]; then
-	cp "$target_dir/x86_64-apple-darwin/$target_subdir/lib${LIB_NAME}.a" \
+	cp "$(lib_for x86_64-apple-darwin)" \
 		"$bundle_dir/$ARTIFACT_NAME-macos-x86_64/lib${LIB_NAME}.a"
 fi
 
-cp "$target_dir/aarch64-apple-ios/$target_subdir/lib${LIB_NAME}.a" \
+cp "$(lib_for aarch64-apple-ios)" \
 	"$bundle_dir/$ARTIFACT_NAME-ios-arm64/lib${LIB_NAME}.a"
 
 if [[ "$INCLUDE_IOS_X86_64" == "true" ]]; then
-	cp "$target_dir/aarch64-apple-ios-sim/$target_subdir/lib${LIB_NAME}.a" \
+	cp "$(lib_for aarch64-apple-ios-sim)" \
 		"$bundle_dir/$ARTIFACT_NAME-ios-sim/lib${LIB_NAME}.a.arm64"
-	cp "$target_dir/x86_64-apple-ios/$target_subdir/lib${LIB_NAME}.a" \
+	cp "$(lib_for x86_64-apple-ios)" \
 		"$bundle_dir/$ARTIFACT_NAME-ios-sim/lib${LIB_NAME}.a.x86_64"
 	echo "=== Creating iOS simulator fat library ==="
 	lipo -create \
@@ -211,14 +282,14 @@ if [[ "$INCLUDE_IOS_X86_64" == "true" ]]; then
 	rm "$bundle_dir/$ARTIFACT_NAME-ios-sim/lib${LIB_NAME}.a.arm64" \
 		"$bundle_dir/$ARTIFACT_NAME-ios-sim/lib${LIB_NAME}.a.x86_64"
 else
-	cp "$target_dir/aarch64-apple-ios-sim/$target_subdir/lib${LIB_NAME}.a" \
+	cp "$(lib_for aarch64-apple-ios-sim)" \
 		"$bundle_dir/$ARTIFACT_NAME-ios-sim/lib${LIB_NAME}.a"
 fi
 
-cp "$target_dir/aarch64-unknown-linux-gnu/$target_subdir/lib${LIB_NAME}.a" \
+cp "$(lib_for aarch64-unknown-linux-gnu)" \
 	"$bundle_dir/$ARTIFACT_NAME-linux-aarch64/lib${LIB_NAME}.a"
 
-cp "$target_dir/x86_64-unknown-linux-gnu/$target_subdir/lib${LIB_NAME}.a" \
+cp "$(lib_for x86_64-unknown-linux-gnu)" \
 	"$bundle_dir/$ARTIFACT_NAME-linux-x86_64/lib${LIB_NAME}.a"
 
 if [[ -n "$HEADER_PATH" && -d "$HEADER_PATH" ]]; then

@@ -52,6 +52,24 @@ inputs:
       directly (no lipo fat-binary step).
     required: false
     default: "true"
+  targets:
+    description: >
+      Comma-separated list of Rust target triples to build. When set, ONLY these
+      triples are built and the action stops after staging their static libraries
+      under `<output-dir>/libs/<triple>/` (see the `libs-dir` output) without
+      assembling a bundle. Use one job per triple, then a final job with
+      `prebuilt-libs-dir` to assemble. Empty (the default) builds every triple and
+      assembles in one job, which is the original behaviour.
+    required: false
+    default: ""
+  prebuilt-libs-dir:
+    description: >
+      Directory holding already-built static libraries laid out as
+      `<triple>/lib<lib-name>.a`. When set, no cargo build runs at all and the
+      bundle is assembled from these files. This is the second half of a split
+      build; pair it with `targets` on the building jobs.
+    required: false
+    default: ""
   dry-run:
     description: "Print the planned commands and exit without building"
     required: false
@@ -85,6 +103,9 @@ outputs:
   checksum:
     description: "SHA256 checksum of the artifact bundle zip"
     value: ${{ steps.build.outputs.checksum }}
+  libs-dir:
+    description: "Directory of staged static libraries, set only in build-only mode (`targets` set)"
+    value: ${{ steps.build.outputs.libs-dir }}
   checksum-file:
     description: "Path to checksum artifact file (used by upload-artifact step)"
     value: ${{ steps.upload-checksum.outputs.checksum-file }}
@@ -108,6 +129,8 @@ runs:
         INPUT_BUILD_PROFILE: ${{ inputs.build-profile }}
         INPUT_INCLUDE_MACOS_X86_64: ${{ inputs.include-macos-x86_64 }}
         INPUT_INCLUDE_IOS_X86_64: ${{ inputs.include-ios-x86_64 }}
+        INPUT_TARGETS: ${{ inputs.targets }}
+        INPUT_PREBUILT_LIBS_DIR: ${{ inputs.prebuilt-libs-dir }}
         INPUT_DRY_RUN: ${{ inputs.dry-run }}
         INPUT_PACKAGE_MANIFEST_PATH: ${{ inputs.package-manifest-path }}
       run: |
