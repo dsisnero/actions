@@ -1,0 +1,17 @@
+# Pinned digests for the Bats source archives this action downloads.
+#
+# Format: <version><TAB><sha256 of the DECOMPRESSED tar stream>
+#
+# The hash covers the tar, not the .tar.gz as served. GitHub generates these archives on demand
+# and does not guarantee the compressed bytes are stable -- in January 2023 a change to its gzip
+# settings altered the checksum of every source archive on the platform without any repository
+# content changing. That incident changed the gzip framing only; the tar payload is derived from
+# git objects and is fixed by the tag. Hashing after decompression therefore survives a recompression
+# while still detecting a tampered download or a moved tag.
+#
+# Reproduce a row with:
+#   curl -sSL https://github.com/bats-core/bats-core/archive/refs/tags/v<version>.tar.gz \
+#     | gzip -dc | shasum -a 256
+1.14.0	2d1383f27796b8cdaff1d47f7ae00ef1b9c400c6d545edee98280e1a0572bc3b
+1.13.0	467265fde9817c295610fdc9612dafca58ef7a1ccb8ddd5639da492d4c3297d6
+1.12.0	3e062efdb28a2ceab89a924c106494176412ce6475dcd00cfcb261f92fdaa98c

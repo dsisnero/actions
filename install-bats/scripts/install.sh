@@ -3,6 +3,10 @@ set -euo pipefail
 
 readonly REPOSITORY="bats-core/bats-core"
 readonly API_BASE_URL="https://api.github.com/repos/${REPOSITORY}/releases"
+# Resolved rather than assumed: the action invokes this by absolute path from github.action_path,
+# so the working directory is the consumer's workspace, not this directory. ~keep
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR
 
 error() {
 	echo "::error::$*" >&2
@@ -68,6 +72,10 @@ print(tag)
 PY
 }
 
+# Sanity-checks the release metadata. Note this asserts the API's tarball_url, which is NOT the
+# URL the archive is fetched from -- download_source_archive uses
+# github.com/<repo>/archive/refs/tags/<tag>.tar.gz, whose bytes differ from the API tarball
+# entirely. Download integrity comes from verify_archive_checksum, not from this. ~keep
 release_has_source_archive() {
 	local metadata_file="$1"
 	local release_tag="$2"
@@ -97,6 +105,63 @@ validate_tag() {
 	local tag="$1"
 
 	[[ "$tag" =~ ^v[0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]
+}
+
+sha256_of_tar() {
+	local archive="$1"
+
+	# The digest covers the decompressed tar, not the archive as served. GitHub generates these
+	# on demand and does not promise the compressed bytes are stable: its January 2023 gzip change
+	# altered the checksum of every source archive on the platform with no repository content
+	# changing. That moved the gzip framing only -- the tar payload comes from git objects and is
+	# fixed by the tag -- so hashing after decompression survives a recompression while still
+	# catching a tampered download or a moved tag. ~keep
+	if command -v sha256sum >/dev/null 2>&1; then
+		gzip -dc "$archive" | sha256sum | awk '{ print $1 }'
+	elif command -v shasum >/dev/null 2>&1; then
+		gzip -dc "$archive" | shasum -a 256 | awk '{ print $1 }'
+	else
+		error "Neither sha256sum nor shasum is available to verify the download."
+	fi
+}
+
+pinned_checksum() {
+	local version="$1"
+	local table="${SCRIPT_DIR}/../checksums.tsv"
+
+	awk -F '\t' -v want="$version" '
+		/^[[:space:]]*#/ { next }
+		NF < 2 { next }
+		$1 == want { print $2; found = 1; exit }
+		END { exit !found }
+	' "$table"
+}
+
+verify_archive_checksum() {
+	local archive="$1"
+	local version="$2"
+	local expected actual
+	local table="${SCRIPT_DIR}/../checksums.tsv"
+
+	# Checked here rather than inside pinned_checksum: `error` exits, but from within a command
+	# substitution it only exits the subshell, so the caller would sail on into the unpinned
+	# warning path and report success with no table at all. ~keep
+	[[ -f "$table" ]] || error "Checksum table is missing: ${table}."
+
+	if ! expected="$(pinned_checksum "$version")" || [[ -z "$expected" ]]; then
+		# `latest` and any release newer than this table resolve here. The download still passes
+		# the structural checks below, but it is not verified against a pinned digest, and a
+		# silent skip would read exactly like a successful verification. ~keep
+		echo "::warning::Bats ${version} is not in install-bats/checksums.tsv; the download was not checksum-verified. Pin a listed version for a reproducible install."
+		return 0
+	fi
+
+	actual="$(sha256_of_tar "$archive")"
+	if [[ "$actual" != "$expected" ]]; then
+		error "Bats ${version} archive digest mismatch: expected ${expected}, got ${actual}."
+	fi
+
+	echo "Verified Bats ${version} against the pinned digest."
 }
 
 # Collapses "." and ".." components without touching the filesystem, so an archive entry can be
@@ -294,6 +359,7 @@ if [[ -x "$bats_bin" ]]; then
 else
 	archive="${stage_dir}/${asset_name}"
 	download_source_archive "$resolved_tag" "$archive"
+	verify_archive_checksum "$archive" "$asset_version"
 	validate_archive "$archive" "bats-core-${asset_version}"
 
 	if ! tar -xzf "$archive" -C "$stage_dir"; then

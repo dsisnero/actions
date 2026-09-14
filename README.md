@@ -260,6 +260,11 @@ with Pester. Install Bats locally through your platform package manager, or use 
 the resolved version. `latest` is still accepted, but it must be typed: a floating default made every
 run's reproducibility depend on nobody omitting the input.
 
+`install-bats` verifies the download against a digest pinned in `install-bats/checksums.tsv`. The
+digest covers the decompressed tar rather than the `.tar.gz` as served, because GitHub generates
+source archives on demand and does not guarantee the compressed bytes are stable. A version absent
+from the table still installs but logs a warning saying it was not verified.
+
 `install-pester` is stricter. Its `version` input must name a release listed in
 `install-pester/checksums.tsv`, and the downloaded package is verified against that pinned SHA256
 before anything is extracted; `latest` is rejected outright, because a floating version cannot be

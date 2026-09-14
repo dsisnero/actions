@@ -47,11 +47,20 @@ setup() {
 	INSTALL_DIR="$TEST_ROOT/install"
 	GITHUB_PATH_FILE="$TEST_ROOT/github-path"
 	CURL_LOG="$TEST_ROOT/curl.log"
-	SCRIPT="$BATS_TEST_DIRNAME/../scripts/install.sh"
+	# install.sh resolves checksums.tsv relative to its own directory, so the suite runs against a
+	# staged copy of the action rather than the checkout. That lets a test pin, unpin or delete the
+	# table without touching the committed one, and lets the fixture builders pin the digest of the
+	# archive they just built -- so every download test exercises the verified path instead of the
+	# unpinned-version warning. ~keep
+	ACTION_DIR="$TEST_ROOT/action"
+	mkdir -p "$ACTION_DIR"
+	cp -R "$BATS_TEST_DIRNAME/../scripts" "$ACTION_DIR/"
+	cp "$BATS_TEST_DIRNAME/../checksums.tsv" "$ACTION_DIR/checksums.tsv"
+	SCRIPT="$ACTION_DIR/scripts/install.sh"
 	mkdir -p "$STUB_BIN" "$INSTALL_DIR"
 	: >"$GITHUB_PATH_FILE"
 	: >"$CURL_LOG"
-	export TEST_ROOT STUB_BIN INSTALL_DIR GITHUB_PATH_FILE CURL_LOG SCRIPT
+	export TEST_ROOT STUB_BIN INSTALL_DIR GITHUB_PATH_FILE CURL_LOG SCRIPT ACTION_DIR
 }
 
 teardown() {
@@ -124,6 +133,34 @@ make_curl_stub() {
 		'esac'
 }
 
+# Mirrors sha256_of_tar in install.sh: the digest covers the decompressed tar, and the tool used is
+# whichever of the two the host provides. ~keep
+# Every path that downloads an archive prints one verification line before its own output. Composing
+# it here keeps that sentence in a single place rather than embedded in each expectation. ~keep
+verified() {
+	printf 'Verified Bats %s against the pinned digest.\n%s' "$1" "$2"
+}
+
+tar_digest() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		gzip -dc "$1" | sha256sum | awk '{ print $1 }'
+	else
+		gzip -dc "$1" | shasum -a 256 | awk '{ print $1 }'
+	fi
+}
+
+pin_digest() {
+	printf '%s\t%s\n' "$1" "$2" >>"$ACTION_DIR/checksums.tsv"
+}
+
+# Pins an archive a test built inline, then echoes its path so it can be used directly as
+# ARCHIVE_FILE. Without the pin the run takes the unpinned-version warning branch and the extra
+# line breaks the exact-output assertions these tests make. ~keep
+serve_archive() {
+	pin_digest "$2" "$(tar_digest "$1")"
+	printf '%s\n' "$1"
+}
+
 write_metadata() {
 	local tag="$1"
 	local tarball_url="${2:-https://api.github.com/repos/bats-core/bats-core/tarball/${tag}}"
@@ -154,6 +191,7 @@ make_source_archive() {
 	ln -s parallel1.bats "$root/test/fixtures/parallel2.bats"
 
 	tar -czf "$TEST_ROOT/source.tar.gz" -C "$TEST_ROOT/src" "bats-core-${version}"
+	pin_digest "$version" "$(tar_digest "$TEST_ROOT/source.tar.gz")"
 	printf '%s\n' "$TEST_ROOT/source.tar.gz"
 }
 
@@ -406,7 +444,7 @@ install_existing_bats() {
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 0 ]
-	[ "$output" = "Bats 1.2.3" ]
+	[ "$output" = "$(verified 1.2.3 "Bats 1.2.3")" ]
 	[ -x "$INSTALL_DIR/bats-core-1.2.3/bin/bats" ]
 	[ "$(cat "$GITHUB_PATH_FILE")" = "$INSTALL_DIR/bats-core-1.2.3/bin" ]
 	[[ "$(cat "$CURL_LOG")" == *"https://github.com/bats-core/bats-core/archive/refs/tags/v1.2.3.tar.gz"* ]]
@@ -489,7 +527,7 @@ PY
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 1 ]
-	[ "$output" = "::error::Downloaded Bats archive does not contain bin/bats." ]
+	[ "$output" = "$(verified 1.2.3 "::error::Downloaded Bats archive does not contain bin/bats.")" ]
 	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
 }
 
@@ -544,11 +582,11 @@ PY
 
 	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
 		GITHUB_TOKEN="secret-token" GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
-		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$TEST_ROOT/escape.tar.gz" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$(serve_archive "$TEST_ROOT/escape.tar.gz" 1.2.3)" \
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 1 ]
-	[ "$output" = "::error::Downloaded Bats archive links outside itself: 'bats-core-1.2.3/bin/escape' -> '../../../../etc/passwd'." ]
+	[ "$output" = "$(verified 1.2.3 "::error::Downloaded Bats archive links outside itself: 'bats-core-1.2.3/bin/escape' -> '../../../../etc/passwd'.")" ]
 	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
 }
 
@@ -562,11 +600,11 @@ PY
 
 	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
 		GITHUB_TOKEN="secret-token" GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
-		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$TEST_ROOT/absolute.tar.gz" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$(serve_archive "$TEST_ROOT/absolute.tar.gz" 1.2.3)" \
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 1 ]
-	[ "$output" = "::error::Downloaded Bats archive links outside itself: 'bats-core-1.2.3/bin/escape' -> '/etc/passwd'." ]
+	[ "$output" = "$(verified 1.2.3 "::error::Downloaded Bats archive links outside itself: 'bats-core-1.2.3/bin/escape' -> '/etc/passwd'.")" ]
 	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
 }
 
@@ -580,11 +618,11 @@ PY
 
 	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
 		GITHUB_TOKEN="secret-token" GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
-		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$TEST_ROOT/special.tar.gz" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$(serve_archive "$TEST_ROOT/special.tar.gz" 1.2.3)" \
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 1 ]
-	[ "$output" = "::error::Downloaded Bats archive contains an unsupported special-file entry: 'bats-core-1.2.3/pipe'." ]
+	[ "$output" = "$(verified 1.2.3 "::error::Downloaded Bats archive contains an unsupported special-file entry: 'bats-core-1.2.3/pipe'.")" ]
 	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
 }
 
@@ -599,7 +637,7 @@ PY
 		/bin/bash "$SCRIPT"
 
 	[ "$status" -eq 1 ]
-	[ "$output" = "::error::Installation directory already exists but does not contain an executable Bats binary: ${INSTALL_DIR}/bats-core-1.2.3." ]
+	[ "$output" = "$(verified 1.2.3 "::error::Installation directory already exists but does not contain an executable Bats binary: ${INSTALL_DIR}/bats-core-1.2.3.")" ]
 	[ "$(cat "$INSTALL_DIR/bats-core-1.2.3/bin/bats")" = "not executable" ]
 }
 
@@ -624,4 +662,116 @@ PY
 
 	[ "$status" -eq 1 ]
 	[ "$(find "$INSTALL_DIR" -maxdepth 1 -name '.install-bats-*' | wc -l | tr -d ' ')" = "0" ]
+}
+
+# ~keep The matching-digest success path is already asserted by
+# should_download_extract_and_publish_the_release_bin_directory_to_github_path, which runs against a
+# table make_source_archive pinned. The cases below cover what that one cannot: a mismatch, an
+# unlisted version, a missing table, the table's own parsing, and what the digest is taken over.
+
+@test "install should_return_error_when_the_archive_digest_does_not_match_the_pin" {
+	make_curl_stub
+	local archive
+	archive="$(make_source_archive 1.2.3)"
+	# Repin to a digest no archive can have, leaving the downloaded bytes untouched -- so the run
+	# fails on the comparison rather than on anything structural. ~keep
+	printf '%s\t%s\n' 1.2.3 "0000000000000000000000000000000000000000000000000000000000000000" >"$ACTION_DIR/checksums.tsv"
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$archive" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == "::error::Bats 1.2.3 archive digest mismatch: "* ]]
+	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
+}
+
+@test "install should_name_both_digests_when_it_refuses_an_archive" {
+	make_curl_stub
+	local archive actual
+	archive="$(make_source_archive 1.2.3)"
+	actual="$(tar_digest "$archive")"
+	printf '%s\t%s\n' 1.2.3 "0000000000000000000000000000000000000000000000000000000000000000" >"$ACTION_DIR/checksums.tsv"
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$archive" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 1 ]
+	[ "$output" = "::error::Bats 1.2.3 archive digest mismatch: expected 0000000000000000000000000000000000000000000000000000000000000000, got ${actual}." ]
+}
+
+@test "install should_warn_rather_than_fail_when_the_version_is_absent_from_the_table" {
+	make_curl_stub
+	local archive
+	archive="$(make_source_archive 1.2.3)"
+	# A table that parses but does not list this version. `latest` and any release newer than the
+	# committed table land here, so it has to install rather than abort. ~keep
+	printf '# only a comment\n' >"$ACTION_DIR/checksums.tsv"
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$archive" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == "::warning::Bats 1.2.3 is not in install-bats/checksums.tsv;"* ]]
+	[ -x "$INSTALL_DIR/bats-core-1.2.3/bin/bats" ]
+}
+
+@test "install should_return_error_when_the_checksum_table_is_missing_entirely" {
+	make_curl_stub
+	local archive
+	archive="$(make_source_archive 1.2.3)"
+	# A missing table is a broken action, not an unpinned version: it must not degrade into the
+	# warning path, which would report success having verified nothing at all. ~keep
+	rm -f "$ACTION_DIR/checksums.tsv"
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$archive" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 1 ]
+	[[ "$output" == "::error::Checksum table is missing: "* ]]
+	[ ! -e "$INSTALL_DIR/bats-core-1.2.3" ]
+}
+
+@test "install should_ignore_comment_and_blank_lines_when_reading_the_table" {
+	make_curl_stub
+	local archive digest
+	archive="$(make_source_archive 1.2.3)"
+	digest="$(tar_digest "$archive")"
+	printf '# leading comment\n\n   \n%s\t%s\n' 1.2.3 "$digest" >"$ACTION_DIR/checksums.tsv"
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$archive" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "$(verified 1.2.3 "Bats 1.2.3")" ]
+}
+
+@test "install should_verify_the_tar_payload_rather_than_the_compressed_bytes" {
+	make_curl_stub
+	local archive recompressed
+	archive="$(make_source_archive 1.2.3)"
+	# GitHub does not promise stable compressed bytes -- its January 2023 gzip change altered the
+	# checksum of every source archive on the platform with no repository content changing.
+	# Recompressing at a different level reproduces exactly that: different .tar.gz, identical tar.
+	# The pin must survive it, or every stored digest rots on the next such change. ~keep
+	recompressed="$TEST_ROOT/recompressed.tar.gz"
+	gzip -dc "$archive" | gzip -9 -c >"$recompressed"
+	[ "$(cksum <"$archive" | awk '{ print $1 }')" != "$(cksum <"$recompressed" | awk '{ print $1 }')" ]
+
+	run env PATH="$STUB_BIN:$SYS_BIN" INPUT_VERSION="1.2.3" INPUT_INSTALL_DIR="$INSTALL_DIR" \
+		GITHUB_PATH="$GITHUB_PATH_FILE" CURL_LOG="$CURL_LOG" \
+		METADATA_JSON="$(write_metadata v1.2.3)" ARCHIVE_FILE="$recompressed" \
+		/bin/bash "$SCRIPT"
+
+	[ "$status" -eq 0 ]
+	[ "$output" = "$(verified 1.2.3 "Bats 1.2.3")" ]
 }
