@@ -9,6 +9,12 @@ inputs:
     description: Optional workspace-relative directory from which to resolve path.
     required: false
     default: ""
+  lib-path:
+    description: >-
+      Optional workspace-relative directory prepended to BATS_LIB_PATH, so suites can
+      `bats_load_library xberg-bats`. Empty leaves BATS_LIB_PATH untouched.
+    required: false
+    default: ""
   args:
     description: Optional newline-delimited Bats arguments. Put one argument on each line.
     required: false
@@ -22,5 +28,6 @@ runs:
       env:
         INPUT_PATH: ${{ inputs.path }}
         INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_LIB_PATH: ${{ inputs.lib-path }}
         INPUT_ARGS: ${{ inputs.args }}
       run: bash "${{ github.action_path }}/scripts/run.sh"

@@ -50,6 +50,7 @@ jobs:
         uses: ./run-bats
         with:
           path: .
+          lib-path: bats-lib
           args: |-
             --recursive
             --print-output-on-failure

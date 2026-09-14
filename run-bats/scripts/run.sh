@@ -66,6 +66,39 @@ if ! is_within_directory "$test_path" "$working_directory"; then
 	error "Bats test path must be inside the working directory."
 fi
 
+lib_path_input="${INPUT_LIB_PATH:-}"
+if [[ -n "$lib_path_input" ]]; then
+	if [[ "$lib_path_input" == /* ]]; then
+		lib_candidate="$lib_path_input"
+	else
+		lib_candidate="${working_directory}/${lib_path_input}"
+	fi
+
+	if [[ ! -d "$lib_candidate" ]]; then
+		error "Bats library path does not exist: ${lib_path_input}."
+	fi
+	if [[ -L "$lib_candidate" ]]; then
+		error "Bats library path must not be a symbolic link."
+	fi
+
+	lib_path="$(cd "$lib_candidate" && pwd -P)"
+
+	if ! is_within_directory "$lib_path" "$workspace"; then
+		error "Bats library path must be inside GITHUB_WORKSPACE."
+	fi
+	if ! is_within_directory "$lib_path" "$working_directory"; then
+		error "Bats library path must be inside the working directory."
+	fi
+	# BATS_LIB_PATH is colon-delimited, so a colon anywhere in the resolved path would split
+	# into two entries that each resolve to nothing, and `bats_load_library` would report a
+	# missing library rather than a malformed path. ~keep
+	if [[ "$lib_path" == *:* ]]; then
+		error "Bats library path must not contain a colon."
+	fi
+
+	export BATS_LIB_PATH="${lib_path}${BATS_LIB_PATH:+:${BATS_LIB_PATH}}"
+fi
+
 bats_args=()
 if [[ -n "${INPUT_ARGS:-}" ]]; then
 	while IFS= read -r argument || [[ -n "$argument" ]]; do

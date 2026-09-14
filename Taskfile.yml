@@ -40,6 +40,10 @@ tasks:
 
   test:bats:
     desc: Run Bats tests for Bash action scripts
+    env:
+      # Suites resolve the shared helpers with `bats_load_library xberg-bats`, which searches
+      # BATS_LIB_PATH and nothing else. CI passes the same directory to run-bats via lib-path.
+      BATS_LIB_PATH: "{{.ROOT_DIR}}/bats-lib"
     cmds:
       - bats --recursive --print-output-on-failure .
 
