@@ -72,23 +72,38 @@ setup() {
 # this test able to fail at all: bats itself runs under whatever newer bash is first on PATH,
 # where the bug does not reproduce.
 @test "unix should_resolve_the_latest_tag_without_an_authorization_header_when_no_token_is_set" {
-	make_stub uname '#!/usr/bin/env bash' \
-		'if [ "$1" = "-s" ]; then printf "%s\n" Linux; else printf "%s\n" x86_64; fi'
-	make_stub curl '#!/usr/bin/env bash' \
-		'printf "%s\n" "$@" >>"$CURL_ARGV"' \
+	xberg_stub uname 'if [ "$1" = "-s" ]; then printf "%s\n" Linux; else printf "%s\n" x86_64; fi'
+	xberg_stub curl \
+		'printf "%s\n" "$@" >>"$XBERG_TRACE"' \
 		'if [ "$1" = "--silent" ] && [ "$2" = "--fail" ]; then printf "%s\n" "  \"tag_name\": \"v2.50.0\","; exit 0; fi' \
 		'exit 99'
 
 	# `env -u NAME` is the portable spelling; GNU's `--unset=NAME` long form does not exist in
 	# BSD env, so it would fail on the macOS runner this test exists to protect.
 	run env -u GITHUB_TOKEN \
-		PATH="$STUB_BIN:$SYS_BIN" HOME="$TEST_ROOT/home" CURL_ARGV="$TEST_ROOT/curl-argv" \
+		PATH="$(xberg_isolated_path)" HOME="$HOME" XBERG_TRACE="$XBERG_TRACE" \
 		/bin/bash "$BATS_TEST_DIRNAME/../scripts/unix.sh" latest
 
-	[ "$status" -ne 0 ] || true
-	# The resolve step must have run and produced no Authorization header.
-	[ -s "$TEST_ROOT/curl-argv" ]
-	! grep -q "Authorization" "$TEST_ROOT/curl-argv"
-	! printf '%s' "$output" | grep -q "unbound variable"
-	! printf '%s' "$output" | grep -q "could not resolve latest gh release"
+	# The trace file is not created by setup, so a non-empty one is proof curl actually ran --
+	# an assertion on the output alone could not tell a silent skip from a real resolve. ~keep
+	[ -s "$XBERG_TRACE" ]
+	# ~keep Spelled as an `if` rather than `! grep -q ...`. Bash exempts a command whose status is
+	# inverted with `!` from `set -e`, so the negated form cannot fail a bats test at all -- it ran
+	# green here with an Authorization header provably in the trace.
+	refute_trace() {
+		if grep -q "$1" "$XBERG_TRACE"; then
+			printf 'trace unexpectedly contains %s\n' "$1" >&2
+			return 1
+		fi
+	}
+	refute_output() {
+		if printf '%s' "$output" | grep -q "$1"; then
+			printf 'output unexpectedly contains %s\n' "$1" >&2
+			return 1
+		fi
+	}
+
+	refute_trace "Authorization"
+	refute_output "unbound variable"
+	refute_output "could not resolve latest gh release"
 }
