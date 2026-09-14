@@ -8,7 +8,10 @@ setup_file() {
 	# ~keep The whole point of the mirror is that this command is missing from it, and a
 	# silent leak would put every test in this file back on the host's copy without
 	# failing. Assert the precondition instead of assuming it.
-	[ ! -e "$SYS_BIN/dotnet" ] || { echo "mirror leaked dotnet" >&2; return 1; }
+	[ ! -e "$SYS_BIN/dotnet" ] || {
+		echo "mirror leaked dotnet" >&2
+		return 1
+	}
 }
 
 teardown_file() {

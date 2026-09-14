@@ -231,6 +231,13 @@ fmt = { exclude = [
 ] }
 commit = { stages = ["commit-msg"] }
 file_safety = { exclude = [
+  # Measured, not inherited: poly's check-shebang-scripts-are-executable reports a NEWLY ADDED
+  # `.bats` file as non-executable even when it is staged 100755. A new `.sh` staged the same way
+  # passes, and already-tracked `.bats` files pass, so it is specific to adding a `.bats`. Without
+  # this entry every commit that introduces a suite is blocked by a false positive.
+  # This exclude does NOT cost lint coverage -- poly has no engine for the .bats extension at all
+  # (`poly lint x.bats` reports "no matching engine for this file type"), so these files were never
+  # linted by poly either way. `task lint:bats` runs shfmt and shellcheck over them instead. ~keep
   "**/*.bats",
   "**/*.lock",
   "**/Cargo.lock",
