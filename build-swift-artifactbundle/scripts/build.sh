@@ -74,25 +74,78 @@ if [[ "$DRY_RUN" == "true" ]]; then
 	exit 0
 fi
 
-echo "=== Adding Rust targets ==="
-apple_targets=(aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim)
-if [[ "$INCLUDE_MACOS_X86_64" == "true" ]]; then
-	apple_targets+=(x86_64-apple-darwin)
-fi
-if [[ "$INCLUDE_IOS_X86_64" == "true" ]]; then
-	apple_targets+=(x86_64-apple-ios)
-fi
-rustup target add "${apple_targets[@]}" \
-	aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+# The full target set, in the order the bundle expects them. `should_build` narrows it when
+# the caller asked for a subset (one job per triple); with TARGETS empty every triple is
+# built, which is the original single-job behaviour. ~keep
+ALL_TARGETS="aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu"
 
-echo "=== Ensuring cargo-zigbuild + Zig are installed ==="
-if ! command -v zig >/dev/null 2>&1; then
-	if command -v brew >/dev/null 2>&1; then
-		brew install zig 2>/dev/null || true
+should_build() {
+	local triple="$1"
+	[[ -n "$PREBUILT_LIBS_DIR" ]] && return 1
+	[[ -z "$TARGETS" ]] && return 0
+	local wanted
+	for wanted in ${TARGETS//,/ }; do
+		[[ "$wanted" == "$triple" ]] && return 0
+	done
+	return 1
+}
+
+# Where a finished static library lives. In assemble mode the libraries were produced by
+# other jobs and downloaded, so they come from a staging directory instead of the cargo
+# target tree. Every copy below goes through this, so the two modes cannot drift. ~keep
+lib_for() {
+	local triple="$1"
+	if [[ -n "$PREBUILT_LIBS_DIR" ]]; then
+		echo "$PREBUILT_LIBS_DIR/$triple/lib${LIB_NAME}.a"
+	else
+		echo "$target_dir/$triple/$target_subdir/lib${LIB_NAME}.a"
 	fi
-fi
-if ! command -v cargo-zigbuild >/dev/null 2>&1; then
-	cargo install --locked cargo-zigbuild 2>/dev/null || true
+}
+
+# Assemble mode compiles nothing, so installing toolchains would be pure cost --
+# `cargo install cargo-zigbuild` alone can run for minutes. In build-only mode install
+# only what the requested triples actually need. ~keep
+if [[ -n "$PREBUILT_LIBS_DIR" ]]; then
+	echo "=== Assemble mode: skipping Rust target and Zig installation ==="
+else
+	echo "=== Adding Rust targets ==="
+	apple_targets=(aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim)
+	if [[ "$INCLUDE_MACOS_X86_64" == "true" ]]; then
+		apple_targets+=(x86_64-apple-darwin)
+	fi
+	if [[ "$INCLUDE_IOS_X86_64" == "true" ]]; then
+		apple_targets+=(x86_64-apple-ios)
+	fi
+	wanted_targets=()
+	for candidate in "${apple_targets[@]}" aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
+		if should_build "$candidate"; then
+			wanted_targets+=("$candidate")
+		fi
+	done
+	if [[ ${#wanted_targets[@]} -gt 0 ]]; then
+		rustup target add "${wanted_targets[@]}"
+	fi
+
+	# Zig is only the cross-linker for the Linux triples; an Apple-only job does not need it.
+	needs_zig=false
+	for candidate in aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
+		if should_build "$candidate"; then
+			needs_zig=true
+		fi
+	done
+	if [[ "$needs_zig" == "true" ]]; then
+		echo "=== Ensuring cargo-zigbuild + Zig are installed ==="
+		if ! command -v zig >/dev/null 2>&1; then
+			if command -v brew >/dev/null 2>&1; then
+				brew install zig 2>/dev/null || true
+			fi
+		fi
+		if ! command -v cargo-zigbuild >/dev/null 2>&1; then
+			cargo install --locked cargo-zigbuild 2>/dev/null || true
+		fi
+	else
+		echo "=== No Linux target requested; skipping Zig installation ==="
+	fi
 fi
 
 mkdir -p "$OUTPUT_DIR"
@@ -133,34 +186,6 @@ prune_target_intermediates() {
 	rm -rf "$dir/deps" "$dir/build" "$dir/incremental" "$dir/examples"
 	echo "  pruned intermediates for $triple; free space now:"
 	df -h "$target_dir" | tail -1
-}
-
-# The full target set, in the order the bundle expects them. `should_build` narrows it when
-# the caller asked for a subset (one job per triple); with TARGETS empty every triple is
-# built, which is the original single-job behaviour. ~keep
-ALL_TARGETS="aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu"
-
-should_build() {
-	local triple="$1"
-	[[ -n "$PREBUILT_LIBS_DIR" ]] && return 1
-	[[ -z "$TARGETS" ]] && return 0
-	local wanted
-	for wanted in ${TARGETS//,/ }; do
-		[[ "$wanted" == "$triple" ]] && return 0
-	done
-	return 1
-}
-
-# Where a finished static library lives. In assemble mode the libraries were produced by
-# other jobs and downloaded, so they come from a staging directory instead of the cargo
-# target tree. Every copy below goes through this, so the two modes cannot drift. ~keep
-lib_for() {
-	local triple="$1"
-	if [[ -n "$PREBUILT_LIBS_DIR" ]]; then
-		echo "$PREBUILT_LIBS_DIR/$triple/lib${LIB_NAME}.a"
-	else
-		echo "$target_dir/$triple/$target_subdir/lib${LIB_NAME}.a"
-	fi
 }
 
 # `df` exits non-zero on a path that does not exist, and under `set -euo pipefail` that

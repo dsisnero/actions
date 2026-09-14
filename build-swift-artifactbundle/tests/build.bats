@@ -55,9 +55,15 @@ stub() {
 	stub zig 'exit 0'
 	stub cargo-zigbuild 'target="${@: -1}"; mkdir -p "$CARGO_TARGET_DIR/$target/release"; touch "$CARGO_TARGET_DIR/$target/release/libmy_lib.a"'
 	stub df 'printf "fixture 100 1 99 1%% /tmp\n"'
+	stub rustup "printf '%s\\n' \"\$*\" >>'$ROOT/rustup.log'"
 	export INPUT_CRATE_NAME=my-crate INPUT_LIB_NAME=my_lib INPUT_ARTIFACT_NAME=Kit INPUT_OUTPUT_DIR="$ROOT/dist" INPUT_TARGETS=aarch64-apple-darwin
 	run bash "$SCRIPT"
 	[ "$status" -eq 0 ]
+	# `should_build` must be defined before the toolchain section uses it. A missing
+	# function returns 127, and `if should_build x` then quietly takes the false branch --
+	# so the only way to see the difference is to assert the target was really added. ~keep
+	[ "$(cat "$ROOT/rustup.log")" = "target add aarch64-apple-darwin" ]
+	[[ "$output" == *"No Linux target requested; skipping Zig installation"* ]]
 	# the requested triple is staged
 	[ -f "$ROOT/dist/libs/aarch64-apple-darwin/libmy_lib.a" ]
 	# and nothing else was built
