@@ -1,0 +1,85 @@
+name: Test install-pester
+on:
+  push:
+    branches: [main]
+    paths:
+      - "install-pester/**"
+      - ".github/workflows/test-install-pester.yml"
+  pull_request:
+    paths:
+      - "install-pester/**"
+      - ".github/workflows/test-install-pester.yml"
+
+permissions:
+  contents: read
+
+# ~keep One declared version per workflow. tests/test_workflow_action_pins.py requires every
+# install-pester call site to name a version, so the number lives here once instead of being
+# repeated -- or, worse, omitted and left to the action default.
+env:
+  PESTER_VERSION: "6.2.0"
+
+jobs:
+  test:
+    name: install-pester on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # These all fail before anything is downloaded, so the step needs no network at all. ~keep
+      - name: Reject versions that cannot be checksum-verified
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:INPUT_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'install-pester-reject'
+          $env:GITHUB_OUTPUT = Join-Path $env:RUNNER_TEMP 'reject-output.txt'
+          $env:GITHUB_ENV = Join-Path $env:RUNNER_TEMP 'reject-env.txt'
+
+          foreach ($version in @('latest', '6.9.9', '1.2.3.4', '1.2.3;rm', '../../etc')) {
+            $env:INPUT_VERSION = $version
+            pwsh -NoProfile -File "$env:GITHUB_WORKSPACE/install-pester/scripts/install.ps1"
+            if ($LASTEXITCODE -eq 0) {
+              throw "expected install-pester to reject version '$version'"
+            }
+          }
+
+      - name: Install the pinned Pester release
+        id: install
+        uses: ./install-pester
+        with:
+          version: ${{ env.PESTER_VERSION }}
+
+      - name: Verify the installed module resolves by name
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ env.PESTER_VERSION }}
+          MODULE_PATH: ${{ steps.install.outputs.module-path }}
+          MODULE_ROOT: ${{ steps.install.outputs.module-root }}
+          REPORTED_VERSION: ${{ steps.install.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:REPORTED_VERSION -ne $env:EXPECTED_VERSION) {
+            throw "version output is '$env:REPORTED_VERSION', expected '$env:EXPECTED_VERSION'"
+          }
+          if (-not (Test-Path -LiteralPath $env:MODULE_PATH -PathType Leaf)) {
+            throw "module-path does not exist: $env:MODULE_PATH"
+          }
+
+          # Imported by name, not by path: that is what proves module-root reached PSModulePath.
+          Import-Module Pester -Force
+          $module = Get-Module Pester
+          if ($module.Version.ToString() -ne $env:EXPECTED_VERSION) {
+            throw "imported Pester is $($module.Version), expected $env:EXPECTED_VERSION"
+          }
+          if (-not $module.Path.StartsWith($env:MODULE_ROOT)) {
+            throw "imported Pester came from $($module.Path), not from $env:MODULE_ROOT"
+          }
+
+      - name: Install again to prove the action is idempotent
+        uses: ./install-pester
+        with:
+          version: ${{ env.PESTER_VERSION }}

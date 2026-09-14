@@ -1,0 +1,174 @@
+name: Test run-pester
+on:
+  push:
+    branches: [main]
+    paths:
+      - "run-pester/**"
+      - ".github/workflows/test-run-pester.yml"
+  pull_request:
+    paths:
+      - "run-pester/**"
+      - ".github/workflows/test-run-pester.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: run-pester on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # A fake Pester that records the configuration it was handed instead of running anything.
+      # It keeps this workflow offline and, more importantly, makes what run.ps1 actually built
+      # observable -- the typed inputs are the whole point of the action, so they get asserted. ~keep
+      - name: Create an offline Pester stub and test fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixture = Join-Path $env:GITHUB_WORKSPACE '.run-pester-fixture'
+          $moduleDirectory = Join-Path $env:GITHUB_WORKSPACE '.run-pester-fake/Pester/9.9.9'
+          New-Item -ItemType Directory -Path (Join-Path $fixture 'tests') -Force | Out-Null
+          New-Item -ItemType Directory -Path $moduleDirectory -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $fixture 'tests/sample.Tests.ps1') -Value '# fixture'
+
+          $moduleBody = @'
+          function New-PesterConfiguration {
+            return [pscustomobject]@{
+              Run        = [pscustomobject]@{ Path = @(); Exit = $false }
+              Output     = [pscustomobject]@{ CIFormat = ''; Verbosity = '' }
+              Should     = [pscustomobject]@{ ErrorAction = '' }
+              Filter     = [pscustomobject]@{ Tag = @(); FullName = @() }
+              TestResult = [pscustomobject]@{ Enabled = $false; OutputPath = '' }
+            }
+          }
+
+          function Invoke-Pester {
+            param(
+              [Parameter(Mandatory)]
+              $Configuration
+            )
+
+            $capture = [pscustomobject]@{
+              Path        = @($Configuration.Run.Path)
+              Exit        = $Configuration.Run.Exit
+              CIFormat    = $Configuration.Output.CIFormat
+              Verbosity   = $Configuration.Output.Verbosity
+              ErrorAction = $Configuration.Should.ErrorAction
+              Tag         = @($Configuration.Filter.Tag)
+              FullName    = @($Configuration.Filter.FullName)
+            }
+            $target = Join-Path $env:GITHUB_WORKSPACE '.run-pester-fixture/invocation.json'
+            $capture | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $target
+          }
+
+          Export-ModuleMember -Function New-PesterConfiguration, Invoke-Pester
+          '@
+          Set-Content -LiteralPath (Join-Path $moduleDirectory 'Pester.psm1') -Value $moduleBody
+
+          $manifest = @'
+          @{
+            ModuleVersion     = '9.9.9'
+            GUID              = 'b4d1f0b2-6f5a-4f1e-9a4a-2b3c4d5e6f70'
+            Author            = 'run-pester tests'
+            RootModule        = 'Pester.psm1'
+            FunctionsToExport = @('New-PesterConfiguration', 'Invoke-Pester')
+          }
+          '@
+          Set-Content -LiteralPath (Join-Path $moduleDirectory 'Pester.psd1') -Value $manifest
+
+      - name: Run a workspace-contained test path
+        uses: ./run-pester
+        with:
+          path: .run-pester-fixture/tests
+          module-path: .run-pester-fake/Pester/9.9.9/Pester.psd1
+          version: "9.9.9"
+          output-verbosity: Normal
+          filter-tag: |-
+            windows
+            needs network
+          filter-full-name: |-
+            Describe one thing
+
+      - name: Verify typed inputs survived without word splitting
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $capturePath = Join-Path $env:GITHUB_WORKSPACE '.run-pester-fixture/invocation.json'
+          $capture = Get-Content -LiteralPath $capturePath -Raw | ConvertFrom-Json
+
+          # Asserted by what the path points AT rather than by string equality: run.ps1 hands Pester a
+          # physically resolved path, and on a host whose workspace sits under a symlinked parent that
+          # is spelled differently from the literal $GITHUB_WORKSPACE. ~keep
+          $paths = @($capture.Path)
+          if ($paths.Count -ne 1) { throw "expected exactly one run path, got $($paths.Count)" }
+          if (-not [System.IO.Path]::IsPathRooted($paths[0])) { throw "run path is not absolute: $($paths[0])" }
+          if (-not (Test-Path -LiteralPath (Join-Path $paths[0] 'sample.Tests.ps1'))) {
+            throw "run path does not point at the fixture suite: $($paths[0])"
+          }
+
+          $tags = @($capture.Tag)
+          if ($tags.Count -ne 2) { throw "expected 2 tags, got $($tags.Count): $($tags -join '|')" }
+          if ($tags[0] -ne 'windows') { throw "first tag is '$($tags[0])'" }
+          if ($tags[1] -ne 'needs network') { throw "second tag is '$($tags[1])', expected 'needs network'" }
+
+          $fullNames = @($capture.FullName)
+          if ($fullNames.Count -ne 1) { throw "expected 1 full-name filter, got $($fullNames.Count)" }
+          if ($fullNames[0] -ne 'Describe one thing') { throw "full-name filter is '$($fullNames[0])'" }
+
+          if ($capture.Verbosity -ne 'Normal') { throw "verbosity is '$($capture.Verbosity)'" }
+          if ($capture.CIFormat -ne 'GithubActions') { throw "CI format is '$($capture.CIFormat)'" }
+          if ($capture.ErrorAction -ne 'Stop') { throw "Should.ErrorAction is '$($capture.ErrorAction)'" }
+          if (-not $capture.Exit) { throw 'Run.Exit was not set' }
+
+          Remove-Item -LiteralPath $capturePath -Force
+
+      - name: Reject an external test path
+        id: external-path
+        continue-on-error: true
+        uses: ./run-pester
+        with:
+          path: ../
+          module-path: .run-pester-fake/Pester/9.9.9/Pester.psd1
+          version: "9.9.9"
+
+      - name: Reject an output verbosity that is not on the allowlist
+        id: bad-verbosity
+        continue-on-error: true
+        uses: ./run-pester
+        with:
+          path: .run-pester-fixture/tests
+          module-path: .run-pester-fake/Pester/9.9.9/Pester.psd1
+          version: "9.9.9"
+          output-verbosity: Verbose
+
+      - name: Reject a Pester whose version does not match
+        id: version-mismatch
+        continue-on-error: true
+        uses: ./run-pester
+        with:
+          path: .run-pester-fixture/tests
+          module-path: .run-pester-fake/Pester/9.9.9/Pester.psd1
+          version: "6.2.0"
+
+      - name: Verify each rejection failed the step
+        shell: pwsh
+        env:
+          EXTERNAL_PATH_OUTCOME: ${{ steps.external-path.outcome }}
+          BAD_VERBOSITY_OUTCOME: ${{ steps.bad-verbosity.outcome }}
+          VERSION_MISMATCH_OUTCOME: ${{ steps.version-mismatch.outcome }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('EXTERNAL_PATH_OUTCOME', 'BAD_VERBOSITY_OUTCOME', 'VERSION_MISMATCH_OUTCOME')) {
+            $outcome = [System.Environment]::GetEnvironmentVariable($name)
+            if ($outcome -ne 'failure') { throw "$name is '$outcome', expected 'failure'" }
+          }
+
+          # A rejected run must not have reached Invoke-Pester at all.
+          $capture = Join-Path $env:GITHUB_WORKSPACE '.run-pester-fixture/invocation.json'
+          if (Test-Path -LiteralPath $capture) { throw 'a rejected run still invoked Pester' }

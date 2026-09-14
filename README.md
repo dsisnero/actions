@@ -241,25 +241,35 @@ jobs:
 # Install dependencies
 task setup
 
-# Run tests (281 tests)
+# Run every suite: pytest, Bats, and Pester
 task test
 
 # Run Bash action tests (requires Bats)
 task test:bats
 
+# Run PowerShell action tests (requires PowerShell 7 and Pester)
+task test:pester
+
 # Lint
 task lint
 ```
 
-Python helpers are tested with pytest; Bash scripts are tested with Bats. Install Bats locally through
-your platform package manager, or use the repository's `install-bats` action in GitHub Actions. The
-action installs a pinned Bats version by default and logs the resolved version. `latest` is still
-accepted, but it must be typed: a floating default made every run's reproducibility depend on nobody
-omitting the input.
+Python helpers are tested with pytest; Bash scripts are tested with Bats; PowerShell scripts are tested
+with Pester. Install Bats locally through your platform package manager, or use the repository's
+`install-bats` action in GitHub Actions. The action installs a pinned Bats version by default and logs
+the resolved version. `latest` is still accepted, but it must be typed: a floating default made every
+run's reproducibility depend on nobody omitting the input.
+
+`install-pester` is stricter. Its `version` input must name a release listed in
+`install-pester/checksums.tsv`, and the downloaded package is verified against that pinned SHA256
+before anything is extracted; `latest` is rejected outright, because a floating version cannot be
+checksum-verified.
 
 ### Shell test policy
 
 Use Bats for Bash scripts on Linux and macOS. Consumer repositories should install it with
 `xberg-io/actions/install-bats` and execute suites with `xberg-io/actions/run-bats`, both pinned to
 an immutable actions revision. PowerShell scripts are not Bats-compatible; their Windows coverage
-belongs in Pester suites and will use a matching setup/run contract in the PowerShell rollout.
+belongs in Pester suites, installed with `xberg-io/actions/install-pester` and executed with
+`xberg-io/actions/run-pester` -- the same setup/run split, with typed inputs in place of run-bats'
+argv list because `Invoke-Pester` takes a configuration object rather than command-line words.

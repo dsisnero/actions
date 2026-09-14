@@ -6,12 +6,16 @@ on:
     paths:
       - "**/scripts/**"
       - "**/tests/**"
+      - "install-pester/**"
+      - "run-pester/**"
       - "Taskfile.yml"
       - ".github/workflows/test-pester.yml"
   pull_request:
     paths:
       - "**/scripts/**"
       - "**/tests/**"
+      - "install-pester/**"
+      - "run-pester/**"
       - "Taskfile.yml"
       - ".github/workflows/test-pester.yml"
 

@@ -1,0 +1,55 @@
+name: Run Pester
+description: Run a Pester suite contained within the workspace.
+inputs:
+  path:
+    description: Test file or directory, relative to the working directory by default.
+    required: false
+    default: "tests"
+  working-directory:
+    description: Optional workspace-relative directory from which to resolve path.
+    required: false
+    default: ""
+  module-path:
+    description: >-
+      Optional path to a specific Pester.psd1, as produced by install-pester's module-path output.
+      Empty imports Pester by name from PSModulePath.
+    required: false
+    default: ""
+  version:
+    description: >-
+      Optional Pester version the imported module must report. Set it to the same value passed to
+      install-pester, so a runner image's own preinstalled Pester cannot silently run the suite.
+    required: false
+    default: ""
+  output-verbosity:
+    description: Pester output verbosity. One of None, Normal, Detailed, Diagnostic.
+    required: false
+    default: "Detailed"
+  filter-tag:
+    description: Optional newline-delimited tags to run. Put one tag on each line.
+    required: false
+    default: ""
+  filter-full-name:
+    description: Optional newline-delimited full-name filters. Put one pattern on each line.
+    required: false
+    default: ""
+  result-path:
+    description: Optional workspace-relative path for the NUnit test-result file.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Run Pester
+      shell: pwsh
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_MODULE_PATH: ${{ inputs.module-path }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_OUTPUT_VERBOSITY: ${{ inputs.output-verbosity }}
+        INPUT_FILTER_TAG: ${{ inputs.filter-tag }}
+        INPUT_FILTER_FULL_NAME: ${{ inputs.filter-full-name }}
+        INPUT_RESULT_PATH: ${{ inputs.result-path }}
+      run: pwsh -NoProfile -File "${{ github.action_path }}/scripts/run.ps1"

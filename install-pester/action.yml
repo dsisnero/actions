@@ -1,0 +1,41 @@
+name: Install Pester
+description: Install a pinned, checksum-verified Pester release from the PowerShell Gallery.
+inputs:
+  version:
+    description: >-
+      Pester version to install. Must be a concrete version that appears in
+      install-pester/checksums.tsv; "latest" is rejected, because a floating version cannot be
+      checksum-verified against a pinned table.
+    required: false
+    default: "6.2.0"
+  install-dir:
+    description: >-
+      Directory in which to install Pester. Defaults to $RUNNER_TEMP/pester, falling back to
+      $HOME/.local/pester outside a runner.
+    required: false
+    default: ""
+
+outputs:
+  module-path:
+    description: Absolute path to the installed Pester.psd1.
+    value: ${{ steps.install.outputs.module-path }}
+  module-root:
+    description: Directory added to PSModulePath, under which Pester/<version>/ lives.
+    value: ${{ steps.install.outputs.module-root }}
+  version:
+    description: The Pester version that was installed.
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    # No runner-OS gate: pwsh ships on all three GitHub-hosted images, and local development on
+    # macOS and Linux has to be able to install the same pinned Pester. Whether a suite is
+    # Windows-only is the consuming workflow's decision, not this action's. ~keep
+    - name: Install Pester
+      id: install
+      shell: pwsh
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_INSTALL_DIR: ${{ inputs.install-dir }}
+      run: pwsh -NoProfile -File "${{ github.action_path }}/scripts/install.ps1"
