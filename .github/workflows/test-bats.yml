@@ -22,6 +22,11 @@ on:
 permissions:
   contents: read
 
+# ~keep One declared version per side of the fence: the workflow passes it to install-bats and the
+# Taskfile names the same number, so a local run and a CI run agree instead of drifting apart.
+env:
+  BATS_VERSION: "1.14.0"
+
 jobs:
   test:
     name: Bats on ${{ matrix.os }}
@@ -38,6 +43,8 @@ jobs:
 
       - name: Install Bats
         uses: ./install-bats
+        with:
+          version: ${{ env.BATS_VERSION }}
 
       - name: Run Bash script tests
         uses: ./run-bats

@@ -86,8 +86,13 @@ jobs:
           fi
           rm -rf "$fixture_dir"
 
-      - name: Install current Bats release
+      # ~keep `latest` is named explicitly. The action's default is a pinned version now, so an
+      # omitted input would quietly turn this job into a second test of the pin and leave the
+      # floating-resolution path -- the one that talks to the release API -- uncovered.
+      - name: Install the latest Bats release
         uses: ./install-bats
+        with:
+          version: latest
 
       - name: Verify Bats installation
         shell: bash

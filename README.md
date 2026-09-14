@@ -253,8 +253,9 @@ task lint
 
 Python helpers are tested with pytest; Bash scripts are tested with Bats. Install Bats locally through
 your platform package manager, or use the repository's `install-bats` action in GitHub Actions. The
-action resolves Bats `latest` by default and logs the resolved version; supply a version explicitly to
-reproduce a prior run.
+action installs a pinned Bats version by default and logs the resolved version. `latest` is still
+accepted, but it must be typed: a floating default made every run's reproducibility depend on nobody
+omitting the input.
 
 ### Shell test policy
 

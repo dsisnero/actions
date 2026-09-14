@@ -2,9 +2,12 @@ name: Install Bats
 description: Install Bats Core from an official GitHub release on Linux or macOS.
 inputs:
   version:
-    description: Bats version to install, with or without a leading "v", or "latest".
+    description: >-
+      Bats version to install, with or without a leading "v". "latest" is still accepted, but it
+      must now be typed: a floating default made every run's reproducibility depend on nobody
+      omitting the input.
     required: false
-    default: "latest"
+    default: "1.14.0"
   install-dir:
     description: Directory in which to install the Bats release.
     required: false
