@@ -49,3 +49,7 @@ poly.local.toml
 .claude/
 .codex/
 # END ai-rulez
+
+# `Invoke-Pester -CI` turns on NUnit output and defaults its path to ./testResults.xml, so any
+# local run with that flag drops an artifact in the repo root.
+testResults.xml
