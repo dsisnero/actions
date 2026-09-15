@@ -118,10 +118,14 @@ trust_tap() {
 	# lives at a path that $XDG_CONFIG_HOME/$HOME can redirect out from under us. Read the
 	# store back and assert the tap is in it. ~keep
 	local trusted
-	trusted="$(brew trust --json v1)" || {
-		echo "ERROR: could not read back the Homebrew trust store." >&2
-		return 1
-	}
+	# An UNREADABLE store only warns: `--json v1` is the read-back shape this brew documents,
+	# but hard-failing on a brew that spells it differently would turn a verification step into
+	# a new way for every bottle build to die. A store we CAN read that lacks the tap is a real
+	# defect and stays fatal. ~keep
+	if ! trusted="$(brew trust --json v1 2>/dev/null)"; then
+		echo "warning: could not read back the Homebrew trust store; skipping the trust assertion" >&2
+		return 0
+	fi
 	TRUST_JSON="$trusted" TRUST_TAP="$tap" python3 -c '
 import json, os, sys
 

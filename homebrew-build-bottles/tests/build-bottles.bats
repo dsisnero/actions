@@ -17,7 +17,9 @@ setup() {
 		'trust)' \
 		'  case "$2" in' \
 		'    --help) [ "${BREW_HAS_TRUST:-1}" = 1 ] || exit 1 ;;' \
-		'    --json) printf "{\"taps\":[%s],\"formulae\":[]}" "${BREW_TRUSTED_TAPS-\"example/tap\"}" ;;' \
+		'    --json)' \
+		'      [ "${BREW_TRUST_JSON_OK:-1}" = 1 ] || exit 1' \
+		'      printf "{\"taps\":[%s],\"formulae\":[]}" "${BREW_TRUSTED_TAPS-\"example/tap\"}" ;;' \
 		'  esac' \
 		'  exit 0 ;;' \
 		'update|tap|install) exit 0 ;;' \
@@ -93,4 +95,19 @@ teardown() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"no \`trust\` command (pre-7.0)"* ]]
 	[[ "$(cat "$TRACE")" == *$'trust --help\ntap example/tap'* ]]
+}
+
+@test "should_warn_and_continue_when_the_trust_store_cannot_be_read_back" {
+	out_dir="$TEST_ROOT/output"
+
+	run env PATH="$STUB_BIN:$ORIGINAL_PATH" BREW_TRACE="$TRACE" BREW_TRUST_JSON_OK=0 \
+		TAG=v1.2.3 VERSION=1.2.3 TAP=example/tap FORMULAS=demo OUT_DIR="$out_dir" \
+		GITHUB_REPO=example/project UPLOAD=false RUNNER_OS=macOS \
+		bash "$ACTION_DIR/scripts/build-bottles.sh"
+
+	# A brew that cannot report its trust store must not take the whole bottle build with it:
+	# trust was still granted, so the tap proceeds. ~keep
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"skipping the trust assertion"* ]]
+	[[ "$(cat "$TRACE")" == *$'trust --tap example/tap\ntrust --json v1\ntap example/tap'* ]]
 }

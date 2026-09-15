@@ -4,6 +4,16 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-09-15
+
+### Fixed
+
+- `homebrew-build-bottles`'s new trust assertion no longer hard-fails when the trust store
+  cannot be read back. `brew trust --json v1` is the read-back shape Homebrew 7.0.1 documents,
+  but aborting on a brew that spells it differently would turn a verification step into a fresh
+  way for every bottle build to die. An unreadable store now warns and continues; a store that
+  reads back *without* the tap in it is still fatal.
+
 ## [1.21.0] - 2026-09-15
 
 ### Fixed
