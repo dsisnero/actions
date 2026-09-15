@@ -4,6 +4,21 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-09-15
+
+### Fixed
+
+- `homebrew-build-bottles` treated `brew trust` as best-effort. `brew trust --tap` was run with
+  `|| echo warning`, so a genuine failure — a locked trust store, a redirected `$HOME`, a bad tap
+  name — was swallowed and resurfaced several commands later as the same
+  `Cannot tap <tap>: invalid syntax in tap!` red herring the trust call exists to prevent. The
+  step now distinguishes the two cases it was conflating: a Homebrew with no `trust` command at
+  all (pre-7.0) is noted and skipped, while a `trust` command that fails is fatal and retried.
+- `homebrew-build-bottles` now reads the trust store back and asserts the tap is in it. A zero
+  exit from `brew trust` is not proof the entry landed — the store is lock-guarded and lives at a
+  path `$XDG_CONFIG_HOME`/`$HOME` can redirect — so the run fails at the trust step with the
+  actual reason instead of at the tap step with a misleading one.
+
 ## [1.20.0] - 2026-09-15
 
 ### Fixed
@@ -22,6 +37,24 @@ All notable changes to xberg-io/actions are documented in this file.
   `Warning: Failed to find package 'tools'` and exits 1. `setup-android-emulator` and
   `reusable-validate` now name `platform-tools` explicitly. This is what took out all four
   kotlin-android-natives legs of the html-to-markdown 3.13.0 release.
+
+## [1.19.0] - 2026-09-14
+
+### Added
+
+- `install-pester` and `run-pester` actions, for PowerShell suites on the Windows legs.
+- `build-swift-artifactbundle` can split the build per target, so one slow target no longer
+  serialises the whole bundle.
+- A shared Bats helper library (`bats-lib`), with the existing suites moved onto it.
+
+### Changed
+
+- `install-bats` pins a default version and verifies the download against a pinned digest.
+
+### Fixed
+
+- `ensure-gh`'s latest-tag test, left behind by the helper refactor.
+- `build-swift-artifactbundle` defined its target helpers after first use.
 
 ## [1.18.1] - 2026-09-13
 
