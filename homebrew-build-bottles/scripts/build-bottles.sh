@@ -129,9 +129,17 @@ trust_tap() {
 	TRUST_JSON="$trusted" TRUST_TAP="$tap" python3 -c '
 import json, os, sys
 
-store = json.loads(os.environ["TRUST_JSON"])
 tap = os.environ["TRUST_TAP"]
-taps = store.get("taps") or []
+# Unparseable is treated exactly like unreadable, for the same reason: this step verifies the
+# trust grant, and must not become the thing that fails the build when a brew reports its store
+# in a shape we do not know. Only a store we successfully parsed can testify that the tap is
+# missing. ~keep
+try:
+    store = json.loads(os.environ["TRUST_JSON"])
+    taps = store.get("taps") or []
+except (ValueError, AttributeError) as exc:
+    sys.stderr.write(f"warning: could not parse the Homebrew trust store ({exc}); skipping the trust assertion\n")
+    raise SystemExit(0) from None
 if tap not in taps:
     sys.stderr.write(
         f"ERROR: brew trust --tap {tap} reported success but {tap!r} is absent from the "

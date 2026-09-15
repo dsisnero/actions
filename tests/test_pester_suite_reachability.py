@@ -35,8 +35,8 @@ _QUOTED = re.compile(r"""['"]([^'"]+)['"]""")
 
 def _tracked_pester_suites() -> list[str]:
     """Suites as git sees them, so an untracked scratch file never fails the gate."""
-    completed = subprocess.run(  # noqa: S603
-        ["git", "ls-files", "*.Tests.ps1"],  # noqa: S607
+    completed = subprocess.run(
+        ["git", "ls-files", "*.Tests.ps1"],
         cwd=_ROOT,
         capture_output=True,
         text=True,
