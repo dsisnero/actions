@@ -358,10 +358,16 @@ jobs:
       # it that session aborts while preparing itself with "SDK location not found. Define a valid
       # SDK location with an ANDROID_HOME environment variable" (235 of the 1102 errors). The
       # action exports ANDROID_HOME/ANDROID_SDK_ROOT itself, so no extra wiring is needed; it is
-      # the same bare invocation html-to-markdown's own ci-e2e Kotlin/Android jobs already use.
+      # the same invocation html-to-markdown's own ci-e2e Kotlin/Android jobs already use.
+      # Google removed the legacy `tools` SDK package, but setup-android's `packages` input still
+      # defaults to `tools platform-tools`, so the bare invocation now dies on
+      # `Warning: Failed to find package 'tools'` -> sdkmanager exit 1. Request platform-tools
+      # explicitly instead of inheriting that default. ~keep
       - name: Set up Android SDK
         if: ${{ inputs.setup-android }}
         uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - name: Set up Go
         if: ${{ inputs.setup-go }}
