@@ -39,7 +39,7 @@ teardown() {
 	[ "$(cat "$out_dir/demo-1.2.3.arm64_sonoma.bottle.tar.gz")" = "bottle" ]
 	[ "$(cat "$out_dir/demo--1.2.3.arm64_sonoma.bottle.json")" = "{}" ]
 	[ ! -e "$gh_trace" ]
-	[ "$(cat "$TRACE")" = $'--version\nconfig\nupdate --quiet\ntap example/tap\ntrust example/tap\nuninstall --force example/tap/demo\n--repository example/tap\nlist libheif\ninstall --build-bottle --verbose example/tap/demo\nbottle --json --no-rebuild example/tap/demo' ]
+	[ "$(cat "$TRACE")" = $'--version\nconfig\nupdate --quiet\ntrust --tap example/tap\ntap example/tap\nuninstall --force example/tap/demo\n--repository example/tap\nlist libheif\ninstall --build-bottle --verbose example/tap/demo\nbottle --json --no-rebuild example/tap/demo' ]
 	[[ "$output" == *"UPLOAD=false: staged demo-1.2.3.arm64_sonoma.bottle.tar.gz in $out_dir for caller-side upload"* ]]
 }
 

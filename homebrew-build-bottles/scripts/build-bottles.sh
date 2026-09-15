@@ -85,8 +85,14 @@ else
 	brew update --quiet || true
 fi
 export HOMEBREW_NO_SANDBOX_LINUX=1
+# Homebrew 7.0 refuses to LOAD formulae from an untrusted third-party tap, and `brew tap`
+# surfaces that refusal as `Cannot tap <tap>: invalid syntax in tap!` -- so trust has to be
+# granted BEFORE the tap, not after it. `brew trust` resolves the name via `Tap.fetch` and
+# does not need the tap on disk. Trusting after `brew tap` is dead code: the tap fails first.
+# The older HOMEBREW_NO_REQUIRE_TAP_TRUST escape hatch is deprecated upstream and slated for
+# removal, so it is deliberately not used here. ~keep
+brew trust --tap "$tap" || echo "warning: brew trust unavailable (brew < 7.0); tap trust not required"
 retry brew tap "$tap"
-brew trust "$tap" || echo "warning: brew trust unavailable; relying on env-var bypass"
 echo "::endgroup::"
 
 normalize_tapped_formula() {
