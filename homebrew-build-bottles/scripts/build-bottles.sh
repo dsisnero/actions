@@ -85,13 +85,60 @@ else
 	brew update --quiet || true
 fi
 export HOMEBREW_NO_SANDBOX_LINUX=1
-# Homebrew 7.0 refuses to LOAD formulae from an untrusted third-party tap, and `brew tap`
-# surfaces that refusal as `Cannot tap <tap>: invalid syntax in tap!` -- so trust has to be
-# granted BEFORE the tap, not after it. `brew trust` resolves the name via `Tap.fetch` and
-# does not need the tap on disk. Trusting after `brew tap` is dead code: the tap fails first.
-# The older HOMEBREW_NO_REQUIRE_TAP_TRUST escape hatch is deprecated upstream and slated for
-# removal, so it is deliberately not used here. ~keep
-brew trust --tap "$tap" || echo "warning: brew trust unavailable (brew < 7.0); tap trust not required"
+trust_tap() {
+	# Homebrew 7.0 refuses to LOAD a formula from an untrusted third-party tap
+	# (`Formulary.factory` -> `Trust.require_trusted_formula!`), and `brew tap` runs a
+	# `Readall.valid_tap?` verify pass over the tap it just cloned. Every formula in the tap
+	# therefore raises `UntrustedTapError`, which `brew tap` reports as the badly misleading
+	# `Cannot tap <tap>: invalid syntax in tap!`. Observed on alef v0.88.0's arm64_sequoia
+	# leg (job 104114753052): the runner started on 6.0.22, `brew update` pulled it to 7.x
+	# mid-job, and the tap then failed five times under `retry` with
+	# `Refusing to load formula xberg-io/tap/alef from untrusted tap xberg-io/tap`.
+	#
+	# Trust therefore has to be granted BEFORE the tap, not after it -- `brew trust` resolves
+	# the name via `Tap.fetch` and does not need the tap on disk, whereas trusting afterwards
+	# is dead code the tap never reaches.
+	#
+	# The deprecated HOMEBREW_NO_REQUIRE_TAP_TRUST escape hatch is deliberately not used:
+	# upstream marks it `odeprecated` with `brew trust` as the named replacement.
+	#
+	# Do not infer from a newer local brew that this is obsolete: on 7.0.1-21-gef55185 the
+	# verify pass filters untrusted formulae out instead of raising, so tapping an untrusted
+	# tap succeeds there. The runners are what matters, and they lag. ~keep
+	if ! brew trust --help >/dev/null 2>&1; then
+		echo "note: this Homebrew has no \`trust\` command (pre-7.0); tap trust is not enforced"
+		return 0
+	fi
+
+	# Fatal, not best-effort: a swallowed failure here resurfaces as the `invalid syntax in
+	# tap!` red herring several commands later. ~keep
+	retry brew trust --tap "$tap"
+
+	# `brew trust` exiting 0 is not proof the entry landed -- the store is lock-guarded and
+	# lives at a path that $XDG_CONFIG_HOME/$HOME can redirect out from under us. Read the
+	# store back and assert the tap is in it. ~keep
+	local trusted
+	trusted="$(brew trust --json v1)" || {
+		echo "ERROR: could not read back the Homebrew trust store." >&2
+		return 1
+	}
+	TRUST_JSON="$trusted" TRUST_TAP="$tap" python3 -c '
+import json, os, sys
+
+store = json.loads(os.environ["TRUST_JSON"])
+tap = os.environ["TRUST_TAP"]
+taps = store.get("taps") or []
+if tap not in taps:
+    sys.stderr.write(
+        f"ERROR: brew trust --tap {tap} reported success but {tap!r} is absent from the "
+        f"trust store (taps={taps!r}).\n"
+    )
+    raise SystemExit(1)
+print(f"Trusted tap verified in store: {tap}")
+'
+}
+
+trust_tap
 retry brew tap "$tap"
 echo "::endgroup::"
 
