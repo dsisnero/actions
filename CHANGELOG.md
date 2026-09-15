@@ -4,6 +4,18 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.21.2] - 2026-09-15
+
+### Fixed
+
+- `homebrew-build-bottles`'s trust assertion crashed with a Python traceback when
+  `brew trust --json v1` emitted something other than JSON, failing the bottle build outright.
+  An unparseable store now takes the same warn-and-continue path as an unreadable one; only a
+  store that actually parsed can testify that the tap is missing.
+- `Unit tests` has failed since 1.19.0 on a ruff `RUF100` error. `S603` is ignored repo-wide and
+  the whole `S` family is ignored under `tests/`, so both `noqa` directives on
+  `_tracked_pester_suites` were dead. Removed.
+
 ## [1.21.1] - 2026-09-15
 
 ### Fixed
