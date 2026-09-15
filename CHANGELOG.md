@@ -4,6 +4,25 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-09-15
+
+### Fixed
+
+- `homebrew-build-bottles` could not tap `xberg-io/tap` at all. Homebrew 7.0 refuses to load
+  formulae from an untrusted third-party tap, and `brew tap` surfaces that refusal as
+  `Cannot tap <tap>: invalid syntax in tap!` — so the `brew trust` call that sat *after*
+  `brew tap` was unreachable: the tap failed first and exhausted the retry loop. Trust is now
+  granted before tapping, which `brew trust` supports because it resolves the name through
+  `Tap.fetch` rather than from disk. The deprecated `HOMEBREW_NO_REQUIRE_TAP_TRUST` bypass is
+  deliberately not used. Observed as a failed `arm64_sonoma` bottle in html-to-markdown 3.13.0
+  and a failed `arm64_sequoia` bottle in alef 0.88.0.
+- Android SDK setup failed wherever `android-actions/setup-android` was invoked without a
+  `packages` input. Google removed the legacy `tools` SDK package while the action still
+  defaults that input to `tools platform-tools`, so `sdkmanager tools` reports
+  `Warning: Failed to find package 'tools'` and exits 1. `setup-android-emulator` and
+  `reusable-validate` now name `platform-tools` explicitly. This is what took out all four
+  kotlin-android-natives legs of the html-to-markdown 3.13.0 release.
+
 ## [1.18.1] - 2026-09-13
 
 ### Fixed
