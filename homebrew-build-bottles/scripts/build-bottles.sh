@@ -130,23 +130,33 @@ trust_tap() {
 import json, os, sys
 
 tap = os.environ["TRUST_TAP"]
+
+
+def normalise(name):
+    # Homebrew treats user/homebrew-foo and user/foo as one tap, and records the short form.
+    # Comparing the raw input against the store reports a missing entry that WAS written:
+    # brew trust --tap xberg-io/homebrew-tap stores the string "xberg-io/tap". ~keep
+    user, _, repo = name.strip().lower().partition("/")
+    return user + "/" + (repo[len("homebrew-"):] if repo.startswith("homebrew-") else repo)
+
+
 # Unparseable is treated exactly like unreadable, for the same reason: this step verifies the
 # trust grant, and must not become the thing that fails the build when a brew reports its store
-# in a shape we do not know. Only a store we successfully parsed can testify that the tap is
-# missing. ~keep
+# in a shape we do not know. Only a store we successfully parsed can testify the tap is missing.
 try:
     store = json.loads(os.environ["TRUST_JSON"])
     taps = store.get("taps") or []
 except (ValueError, AttributeError) as exc:
-    sys.stderr.write(f"warning: could not parse the Homebrew trust store ({exc}); skipping the trust assertion\n")
+    sys.stderr.write("warning: could not parse the Homebrew trust store (%s); skipping the trust assertion\n" % exc)
     raise SystemExit(0) from None
-if tap not in taps:
+wanted = normalise(tap)
+if wanted not in {normalise(e) for e in taps if isinstance(e, str)}:
     sys.stderr.write(
-        f"ERROR: brew trust --tap {tap} reported success but {tap!r} is absent from the "
-        f"trust store (taps={taps!r}).\n"
+        "ERROR: brew trust --tap %s reported success but %r is absent from the trust store (taps=%r).\n"
+        % (tap, wanted, taps)
     )
     raise SystemExit(1)
-print(f"Trusted tap verified in store: {tap}")
+print("Trusted tap verified in store: " + wanted)
 '
 }
 

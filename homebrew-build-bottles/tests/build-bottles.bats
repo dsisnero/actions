@@ -111,3 +111,19 @@ teardown() {
 	[[ "$output" == *"skipping the trust assertion"* ]]
 	[[ "$(cat "$TRACE")" == *$'trust --tap example/tap\ntrust --json v1\ntap example/tap'* ]]
 }
+
+@test "should_accept_the_store_short_name_when_the_tap_input_carries_the_homebrew_prefix" {
+	out_dir="$TEST_ROOT/output"
+
+	# The workflows pass `tap: xberg-io/homebrew-tap`, but `brew trust` records the short form
+	# `xberg-io/tap` -- Homebrew treats the two as one tap. Comparing the raw input against the
+	# store failed all three alef 0.89.0 bottle legs on a tap that HAD been trusted. ~keep
+	run env PATH="$STUB_BIN:$ORIGINAL_PATH" BREW_TRACE="$TRACE" BREW_TRUSTED_TAPS='"example/tap"' \
+		TAG=v1.2.3 VERSION=1.2.3 TAP=example/homebrew-tap FORMULAS=demo OUT_DIR="$out_dir" \
+		GITHUB_REPO=example/project UPLOAD=false RUNNER_OS=macOS \
+		bash "$ACTION_DIR/scripts/build-bottles.sh"
+
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"Trusted tap verified in store: example/tap"* ]]
+	[[ "$output" != *"absent from the trust store"* ]]
+}

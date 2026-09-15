@@ -4,6 +4,18 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.21.3] - 2026-09-15
+
+### Fixed
+
+- `homebrew-build-bottles`'s trust assertion failed on a tap that HAD been trusted. Homebrew
+  treats `user/homebrew-foo` and `user/foo` as one tap and records the short form, so
+  `brew trust --tap xberg-io/homebrew-tap` stores `xberg-io/tap` — and comparing the raw action
+  input against the store reported a missing entry that was in fact written. Every caller passes
+  the `homebrew-`-prefixed spelling, so this broke all three bottle legs of alef 0.89.0,
+  including the two Linux ones that had never failed before. Both sides are now normalised the
+  way Homebrew normalises them.
+
 ## [1.21.2] - 2026-09-15
 
 ### Fixed
