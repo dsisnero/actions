@@ -4,6 +4,20 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.22.1] - 2026-09-16
+
+### Fixed
+
+- `wait-for-package` no longer fails a Maven release that is already resolvable. The maven check
+  polled `.../<group>/<artifact>/<version>/`, a directory listing repo1 generates lazily, after
+  the files it lists. html-to-markdown 3.14.0 served `html-to-markdown-3.14.0.pom` and the `.jar`
+  beside it, and `maven-metadata.xml` already named the version, while that listing was still 404
+  -- the two-day-old 3.13.0 listing existed, the fresh one did not. Both Maven jobs in the 3.14.0
+  publish run therefore burned the full 60-attempt backoff and reported a failure for artifacts
+  that were live. It now requests the POM, which is the first thing every resolver fetches. This
+  is the second index to produce the same false negative here; the first was solrsearch. Poll the
+  artifact, never something built from it.
+
 ## [1.22.0] - 2026-09-16
 
 ### Added

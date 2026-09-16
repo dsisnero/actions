@@ -123,7 +123,7 @@ def test_check_maven_accepts_group_artifact_coordinate(monkeypatch):
     captured = _record_urls(monkeypatch)
 
     assert wait_mod.check_maven("com.example:myartifact", "1.2.3", group_id="") is True
-    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/"]
+    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/myartifact-1.2.3.pom"]
 
 
 def test_check_maven_queries_repository_not_search_index(monkeypatch):
@@ -131,8 +131,23 @@ def test_check_maven_queries_repository_not_search_index(monkeypatch):
 
     wait_mod.check_maven("myartifact", "1.2.3", group_id="com.example")
 
-    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/"]
+    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/myartifact-1.2.3.pom"]
     assert "search.maven.org" not in captured[0]
+
+
+def test_check_maven_polls_the_pom_not_the_generated_directory_listing(monkeypatch):
+    """repo1 builds a version's directory listing lazily, after the files it lists.
+
+    html-to-markdown 3.14.0 served its `.pom` and `.jar` while `.../3.14.0/` was still
+    404, so polling the listing failed a release that was already resolvable. Assert the
+    request names the POM, not a bare directory.
+    """
+    captured = _record_urls(monkeypatch)
+
+    wait_mod.check_maven("io.xberg:html-to-markdown", "3.14.0", group_id="")
+
+    assert captured == ["https://repo1.maven.org/maven2/io/xberg/html-to-markdown/3.14.0/html-to-markdown-3.14.0.pom"]
+    assert not captured[0].endswith("/")
 
 
 def test_split_maven_coordinate_prefers_the_coordinate_form():
@@ -226,7 +241,7 @@ def test_wait_for_package_maven_accepts_coordinate_without_group_input(monkeypat
     result = wait_mod.wait_for_package("maven", "com.example:myartifact", "1.2.3", max_attempts=1)
 
     assert result is True
-    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/"]
+    assert captured == ["https://repo1.maven.org/maven2/com/example/myartifact/1.2.3/myartifact-1.2.3.pom"]
 
 
 def test_check_rubygems_found(monkeypatch):

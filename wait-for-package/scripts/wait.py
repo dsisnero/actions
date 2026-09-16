@@ -142,11 +142,17 @@ def split_maven_coordinate(package: str, group_id: str = "") -> tuple[str, str]:
 
 
 def check_maven(package: str, version: str, group_id: str = "") -> bool:
-    """Check Maven Central's repository for the published version directory.
+    """Check Maven Central for the published POM of an exact version.
 
-    The solrsearch index this used to query lags repo1 by hours, so a freshly
-    published artifact polled through it reports "not yet available" for the entire
-    backoff window. repo1 is what consumers resolve against, so ask it directly.
+    Ask for the artifact a consumer actually resolves, never an index built from it.
+    Two indexes have each produced a false negative for a release that was already
+    live: the solrsearch index lags repo1 by hours, and repo1's own generated
+    directory listing lags the files inside it. html-to-markdown 3.14.0 failed this
+    check against `.../3.14.0/` while `.../3.14.0/html-to-markdown-3.14.0.pom` and
+    the `.jar` beside it both served 200 and `maven-metadata.xml` already listed the
+    version -- the two-day-old 3.13.0 listing existed, the fresh one did not. The POM
+    is the first thing every resolver fetches, so its presence is the property worth
+    polling.
     """
     group, artifact = split_maven_coordinate(package, group_id)
     if not group or not artifact:
@@ -156,7 +162,8 @@ def check_maven(package: str, version: str, group_id: str = "") -> bool:
         )
         return False
     group_path = group.replace(".", "/")
-    status, _ = http_get(f"https://repo1.maven.org/maven2/{group_path}/{artifact}/{version}/")
+    pom = f"https://repo1.maven.org/maven2/{group_path}/{artifact}/{version}/{artifact}-{version}.pom"
+    status, _ = http_get(pom)
     return status == HTTP_OK
 
 
