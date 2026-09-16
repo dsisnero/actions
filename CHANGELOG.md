@@ -4,6 +4,20 @@ All notable changes to xberg-io/actions are documented in this file.
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-09-16
+
+### Added
+
+- `setup-c-cpp-tools` installs a pinned `shfmt` (3.14.1), controlled by the new `install-shfmt`
+  and `shfmt-version` inputs, and `reusable-validate` now provisions it. poly delegates shell
+  formatting to `shfmt` only *when present* and silently skips shell entirely when it is absent,
+  so a runner without it formats nothing while a developer machine with it formats everything.
+  That asymmetry is invisible until a generated file is compared byte-for-byte:
+  html-to-markdown run 35080918605 regenerated `e2e/c/download_ffi.sh` unformatted and failed the
+  fixture drift check against a tree a local `shfmt` had formatted. Pinned rather than taken from
+  the distro for the same reason `clang-format` is -- an unpinned formatter makes `poly fmt
+  --check` non-deterministic across machines.
+
 ## [1.21.3] - 2026-09-15
 
 ### Fixed

@@ -1,7 +1,7 @@
 name: Setup C/C++ Tools
 description: |
   Install the C/C++ toolchain used by xberg-io pre-commit hooks (cppcheck,
-  clang-format, shellcheck). Pins cppcheck to the version expected by
+  clang-format, shellcheck, shfmt). Pins cppcheck to the version expected by
   xberg-io/pre-commit-hooks (currently 2.20.0) — Ubuntu's stock package is
   too old, so cppcheck is built from source via CMake when not already on PATH
   at the expected version. clang-format is pinned to the same version on every
@@ -33,6 +33,17 @@ inputs:
     description: Install shellcheck via apt (Linux only).
     required: false
     default: "true"
+  install-shfmt:
+    description: Install shfmt.
+    required: false
+    default: "true"
+  shfmt-version:
+    description: >-
+      shfmt version to install, from the upstream release binary so every platform gets the same
+      formatter. Its output gates `poly fmt --check` and every shell file `alef generate` emits,
+      and poly skips shell entirely when shfmt is absent, so this must stay pinned.
+    required: false
+    default: "3.14.1"
 
 runs:
   using: composite
@@ -57,6 +68,8 @@ runs:
         INSTALL_CLANG_FORMAT: ${{ inputs.install-clang-format }}
         INSTALL_CPPCHECK: ${{ inputs.install-cppcheck }}
         INSTALL_SHELLCHECK: ${{ inputs.install-shellcheck }}
+        INSTALL_SHFMT: ${{ inputs.install-shfmt }}
+        SHFMT_VERSION: ${{ inputs.shfmt-version }}
       run: |
         "${{ github.action_path }}/scripts/linux.sh"
 
@@ -69,5 +82,7 @@ runs:
         INSTALL_CLANG_FORMAT: ${{ inputs.install-clang-format }}
         INSTALL_CPPCHECK: ${{ inputs.install-cppcheck }}
         INSTALL_SHELLCHECK: ${{ inputs.install-shellcheck }}
+        INSTALL_SHFMT: ${{ inputs.install-shfmt }}
+        SHFMT_VERSION: ${{ inputs.shfmt-version }}
       run: |
         "${{ github.action_path }}/scripts/macos.sh"

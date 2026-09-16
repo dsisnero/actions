@@ -484,13 +484,16 @@ jobs:
         with:
           php-version: ${{ inputs.php-version }}
 
-      # ~keep poly delegates C, C++, and C# formatting to clang-format, so its version decides
-      # whether `poly fmt --check` passes. Without this the job silently used the runner image's
-      # clang-format 18, which rewrites `object? x` to `object ? x` and failed correct generated
-      # C#. Installed unconditionally: an absent formatter makes poly skip those files instead,
-      # which is how drift reaches main in the first place. Nothing here runs cppcheck or
-      # shellcheck, and on Linux a cppcheck version miss builds it from source.
-      - name: Set up clang-format
+      # ~keep poly delegates C, C++, and C# formatting to clang-format and shell formatting to
+      # shfmt, so their versions decide whether `poly fmt --check` passes. Without this the job
+      # silently used the runner image's clang-format 18, which rewrites `object? x` to
+      # `object ? x` and failed correct generated C#. Installed unconditionally: an absent
+      # formatter makes poly skip those files instead, which is how drift reaches main in the
+      # first place -- html-to-markdown run 35080918605 regenerated e2e/c/download_ffi.sh with no
+      # shfmt on PATH and failed the drift check below against a locally formatted tree. Nothing
+      # here runs cppcheck or shellcheck, and on Linux a cppcheck version miss builds it from
+      # source.
+      - name: Set up clang-format and shfmt
         uses: xberg-io/actions/setup-c-cpp-tools@v1
         with:
           install-cppcheck: "false"

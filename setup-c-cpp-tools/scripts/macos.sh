@@ -5,6 +5,7 @@ CPPCHECK_VERSION="${CPPCHECK_VERSION:-2.20.0}"
 INSTALL_CLANG_FORMAT="${INSTALL_CLANG_FORMAT:-true}"
 INSTALL_CPPCHECK="${INSTALL_CPPCHECK:-true}"
 INSTALL_SHELLCHECK="${INSTALL_SHELLCHECK:-true}"
+INSTALL_SHFMT="${INSTALL_SHFMT:-true}"
 
 brew_packages=()
 [[ "$INSTALL_CPPCHECK" == "true" ]] && brew_packages+=(cppcheck)
@@ -16,6 +17,10 @@ fi
 
 if [[ "$INSTALL_CLANG_FORMAT" == "true" ]]; then
 	"$(dirname "${BASH_SOURCE[0]}")/clang-format.sh"
+fi
+
+if [[ "$INSTALL_SHFMT" == "true" ]]; then
+	"$(dirname "${BASH_SOURCE[0]}")/shfmt.sh"
 fi
 
 if [[ "$INSTALL_CPPCHECK" != "true" ]]; then
