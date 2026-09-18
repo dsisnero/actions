@@ -1,0 +1,60 @@
+name: Build Crystal Package
+description: >
+  Build the workspace FFI crate that the Crystal shard links against and run
+  a `crystal build` smoke check on the shard under `package-dir`. Crystal
+  shards publish via Git tag tarballs, so this action's job is
+  health-checking — not producing an upload artifact.
+
+  Assumes the calling workflow has already checked out the repo and set up
+  Rust (e.g. via `xberg-io/actions/setup-rust@v1`).
+
+inputs:
+  ffi-crate:
+    description: "Workspace FFI crate name (the C library the Crystal shard links against)"
+    required: false
+    default: "xberg-ffi"
+  package-dir:
+    description: "Directory containing shard.yml and the generated Crystal bindings"
+    required: false
+    default: "packages/crystal"
+  build-profile:
+    description: "Cargo build profile for the FFI crate (release, dev, or a custom named profile)"
+    required: false
+    default: "release"
+  setup-crystal:
+    description: "Install Crystal via crystal-lang/install-crystal. Set to 'false' if Crystal is already installed."
+    required: false
+    default: "true"
+  crystal-version:
+    description: "Crystal version (passed to crystal-lang/install-crystal; 'latest' = stable)"
+    required: false
+    default: "latest"
+  dry-run:
+    description: "Print the planned commands and exit without building"
+    required: false
+    default: "false"
+
+outputs:
+  ffi-library-path:
+    description: "Absolute path to the built FFI library that the Crystal shard links against"
+    value: ${{ steps.build.outputs.ffi-library-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Crystal
+      if: inputs.setup-crystal == 'true' && inputs.dry-run != 'true'
+      uses: crystal-lang/install-crystal@v1
+      with:
+        version: ${{ inputs.crystal-version }}
+
+    - name: Build FFI crate and run crystal build
+      id: build
+      shell: bash
+      env:
+        INPUT_FFI_CRATE: ${{ inputs.ffi-crate }}
+        INPUT_PACKAGE_DIR: ${{ inputs.package-dir }}
+        INPUT_BUILD_PROFILE: ${{ inputs.build-profile }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        bash "${{ github.action_path }}/scripts/build.sh"

@@ -132,6 +132,9 @@ outputs:
   release_zig:
     value: ${{ steps.prepare.outputs.release_zig }}
     description: "Whether the zig target is enabled (requires alef >= 0.15.8)"
+  release_crystal:
+    value: ${{ steps.prepare.outputs.release_crystal }}
+    description: "Whether the crystal target is enabled (the repo ships a packages/crystal tree)"
   release_kotlin:
     value: ${{ steps.prepare.outputs.release_kotlin }}
     description: "Whether the kotlin target is enabled (requires alef >= 0.15.8)"
@@ -261,3 +264,13 @@ runs:
 
         # Emit each top-level field as a GITHUB_OUTPUT line.
         echo "${json}" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >>"$GITHUB_OUTPUT"
+
+        # release_crystal is derived from the presence of the packaged Crystal
+        # tree rather than from `alef release-metadata` (the alef release-target
+        # list predates Crystal). Gate the Crystal publish job exactly like the
+        # language jobs: true iff the repo ships a packages/crystal tree.
+        if [[ -d "packages/crystal" ]]; then
+          echo "release_crystal=true" >>"$GITHUB_OUTPUT"
+        else
+          echo "release_crystal=false" >>"$GITHUB_OUTPUT"
+        fi
